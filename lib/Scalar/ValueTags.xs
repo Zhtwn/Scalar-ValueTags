@@ -437,7 +437,7 @@ static void S_nparens_high_waterlevel(pTHX_ U32 nparens)
 #ifdef MULTIPLICITY
   /* With MULTIPLICITY builds we need a unique value per interpreter; we'll
    * store it in PL_modglobal */
-  SV *waterlevel_sv = *hv_fetchs(PL_modglobal, "Data::Hounding/nparens_high_waterlevel", GV_ADD);
+  SV *waterlevel_sv = *hv_fetchs(PL_modglobal, "Scalar::ValueTags/nparens_high_waterlevel", GV_ADD);
   U32 waterlevel = SvIOK(waterlevel_sv) ? SvIV(waterlevel_sv) : 0;
 #else
   /* We can take a shortcut. As there's only one, just keep it statically here
@@ -487,7 +487,7 @@ static bool str_includes_flag(const char *s, const char *flag)
   return false;
 }
 
-MODULE = Data::Hounding    PACKAGE = Data::Hounding
+MODULE = Scalar::ValueTags    PACKAGE = Scalar::ValueTags
 
 void
 hound_apply(SV *targref, SV *ann)
@@ -520,7 +520,7 @@ hound_query(SV *targref)
 
     if(GIMME_V == G_VOID)
       Perl_ck_warner(aTHX_ packWARN(WARN_VOID),
-        "Useless use of Data::Hounding::hound_query() in void context");
+        "Useless use of Scalar::ValueTags::hound_query() in void context");
 
     if(GIMME_V <= G_SCALAR)
       XSRETURN_UV(count);
@@ -559,15 +559,15 @@ BOOT:
   const char *disable_flags = getenv("PERL_DATA_HOUNDING_DISABLE");
 #    include "hounded_boot.c.inc"
 #    ifdef HAVE_DMD_HELPER
-  DMD_ADD_ROOT((SV *)&vtbl_hounding, "the Data::Hounding VTBL");
+  DMD_ADD_ROOT((SV *)&vtbl_hounding, "the Scalar::ValueTags VTBL");
 #    endif
 #  endif
 #  ifdef HAVE_MAGIC_V2
 #    ifdef HAVE_DMD_HELPER
-  DMD_ADD_ROOT((SV *)&hound_hooks, "the Data::Hounding Hook");
+  DMD_ADD_ROOT((SV *)&hound_hooks, "the Scalar::ValueTags Hook");
 #    endif
 #  endif
 #  ifdef DEBUG_TRACE_ANNOTATIONS
-  DMD_ADD_ROOT((SV *)&vtbl_hound_debugtrace, "the Data::Hounding debug trace VTBL");
+  DMD_ADD_ROOT((SV *)&vtbl_hound_debugtrace, "the Scalar::ValueTags debug trace VTBL");
 #  endif
 #endif

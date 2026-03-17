@@ -1,4 +1,4 @@
-package Data::Hounding 0.001;
+package Scalar::ValueTags 0.001;
 
 use v5.28;
 
@@ -22,11 +22,12 @@ our @EXPORT = qw( hound_apply hound_query hound_delete IS_HOUNDING_ENABLED IS_HO
 
 =head1 NAME
 
-C<Data::Hounding> - Infectious magic data invisibly attached to variables
+C<Scalar::ValueTags> - Infectious magic data invisibly attached to variables
 
 =head1 SYNOPSIS
 
-    use Data::Hounding;
+FIXME - rewrite once new API is shaped
+    use Scalar::ValueTags;
 
     # apply hounding annotation to $foo
     my $annotation = 'origin: somewhere';
@@ -47,7 +48,9 @@ C<Data::Hounding> - Infectious magic data invisibly attached to variables
 
 =head1 DESCRIPTION
 
-The C<Data::Hounding> module provides functions for managing hounding
+FIXME - rewrite once new API is shaped
+
+The C<Scalar::ValueTags> module provides functions for managing hounding
 annotations to variables.
 
 A "hounding annotation" is a metadata string describing the value of
@@ -71,7 +74,7 @@ constant.
 
 The propagation of the annotations is done by using the Value Magic
 feature that is being added to core Perl as part of Magic V2. By using
-Value Magic's C<infect> callback, C<Data::Hounding> combines all of
+Value Magic's C<infect> callback, C<Scalar::ValueTags> combines all of
 the unique hounding annotations from all of the source variables, and
 attaches them to the destination variable.
 
@@ -196,14 +199,14 @@ previous reference.
 
 =head2 USERTAINT
 
-Originally, C<Data::Hounding> was developed on top of the C<USERTAINT> core
+Originally, C<Scalar::ValueTags> was developed on top of the C<USERTAINT> core
 patches, which leveraged the Perl C<taint> behavior to add and propagate
 hounding annotations on variables. This was a proof-of-concept core
 implementation that provided the needed behavior in an I<ad hoc> manner.
 The C<USERTAINT> implementation includes quite a bit of workaround
 code that handles special cases that could not be done directly with
 C<taint>. Some of these workarounds needed to be implemented in
-C<Data::Hounding> so that the Perl operator overloads would happen
+C<Scalar::ValueTags> so that the Perl operator overloads would happen
 at the correct time.
 
 =head2 Hooks / Magic v2
@@ -216,36 +219,36 @@ tested in the Perl core.
 
 =head2 Transition
 
-Currently, C<Data::Hounding> detects whether the C<Magic v2> or
+Currently, C<Scalar::ValueTags> detects whether the C<Magic v2> or
 C<USERTAINT> implementation is available in Perl core, and uses that.
 
-This allows the same C<Data::Hounding> code to be used for testing
+This allows the same C<Scalar::ValueTags> code to be used for testing
 C<Bookings::Data::Lineage> code on a C<USERTANT>-patched Perl 5.36.0.
 When the C<Magic v2> feature is merged into a future version of Perl
-and Booking is using that Perl version, then C<Data::Hounding> and
+and Booking is using that Perl version, then C<Scalar::ValueTags> and
 all of the C<Bookings::Data::Lineage> code will continue to behave
 in the same manner (modulo any bugs in the POC C<USERTAINT> code).
 
-To ensure that C<Data::Hounding> works the same on both C<USERTAINT>
+To ensure that C<Scalar::ValueTags> works the same on both C<USERTAINT>
 and C<Magic v2>, the differences between implementations have been
 isolated into four low-level functions: C<get_hounding_magic>,
 C<add_hounding_magic>, C<remove_hounding_magic>, and C<get_hounding_av>.
 Other than the additional Perl operator overrides specific to C<USERTAINT>,
-the rest of the C<Data::Hounding> code is shared between the two core
+the rest of the C<Scalar::ValueTags> code is shared between the two core
 implementations.
 
 =head1 DEBUGGING
 
 =head2 Devel::MAT::Dumper
 
-If C<Devel::MAT::Dumper> is installed, then C<Data::Hounding> will add any
+If C<Devel::MAT::Dumper> is installed, then C<Scalar::ValueTags> will add any
 hounding annotations to the dumped data.
 
 See C<HAVE_DMD_HELPER> in the XS code.
 
 =head2 DEBUG_TRACE_ANNOTATIONS
 
-If C<Data::Hounding> is configured with the C<--with-trace> option, then
+If C<Scalar::ValueTags> is configured with the C<--with-trace> option, then
 additional Perl magic is added to each of the hounding annotations indicating
 the source code origin of that annotation.
 
@@ -253,10 +256,10 @@ To enable this, use C<perl Build.PL --with-trace>.
 
 =head2 USERTAINT debugging
 
-Any of the Perl operations that are overridden by C<Data::Hounding> when
+Any of the Perl operations that are overridden by C<Scalar::ValueTags> when
 using the C<USERTAINT> application can be disabled by setting an environment
 variable. This is primarily useful for debugging the portion of C<USERTAINT>
-implemented in C<Data::Hounding>, and is not likely to be very helpful
+implemented in C<Scalar::ValueTags>, and is not likely to be very helpful
 otherwise.
 
 To disable these Perl operation overrides, set a C<PERL_DATA_HOUNDING_DISABLE>
@@ -282,4 +285,4 @@ up C<$1> etc and also handles hounded expressions in the replacement.
 
 For example:
 
-    $ PERL_DATA_HOUNDING_DISABLE=match perl -MData::Hounding ...
+    $ PERL_DATA_HOUNDING_DISABLE=match perl -MScalar::ValueTags ...
