@@ -1,0 +1,20 @@
+.gitignore
+Build.PL
+DMD_helper.h
+lib/Scalar/ValueTags.pm
+lib/Scalar/ValueTags.xs
+MANIFEST			This list of files
+MANIFEST.SKIP
+t/01valuetags.t
+t/02basics.t
+t/10unops.t
+t/11binops.t
+t/12listops.t
+t/13pmops.t
+t/20ctrlops.t
+t/21try.t
+t/30overload.t
+t/82devel-mat-dumper-helper.t
+t/83devel-debug-trace.t
+t/90sum0.t
+t/98hound-always.t
