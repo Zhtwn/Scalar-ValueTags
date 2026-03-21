@@ -4,13 +4,16 @@ use feature 'signatures';
 use Test2::V0;
 no warnings 'experimental::signatures';
 
-use Data::Hounding;
+use Scalar::ValueTags;
 # DO NOT SKIP even if unavailable, to check the base API is harmless here
 
-hound_apply( \my $var, [] );
-hound_delete( \$var );
+# use same Scalar::ValueTags type for all tests
+my $vt_type = register_value_tags_type(SVTAGS_UNIQUE_REF_ARRAY);
 
-is( [ hound_query( \$var ) ], [],
-    'hound_query yields empty list' );
+add_value_tag( $vt_type, \my $var, [] );
+clear_value_tags( $vt_type, \$var );
+
+is( get_value_tags( $vt_type, \$var ), undef,
+    'variable should not have value tags' );
 
 done_testing;

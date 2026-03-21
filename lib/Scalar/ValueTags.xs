@@ -21,553 +21,575 @@
 #  define av_count(av) (AvFILL(av)+1)
 #endif
 
-/* Determine core hounding implementation, if any */
-#if defined(sv_hook_add)
-#  define HAVE_MAGIC_V2
-#elif defined(sv_usertaint_applyto)
-#  define HAVE_USERTAINT
+#if defined(sv_magicv2_add)
+#  define HAVE_VALUE_MAGIC
 #endif
 
-#if defined(HAVE_MAGIC_V2) || defined(HAVE_USERTAINT)
-#  define HAVE_HOUNDING
-#endif
+// outside of HAVE_VALUE_MAGIC, since SVTAGS_* needs to return the values
+// FIXME: how should API functions behave without scalar value magic?
+enum behavior_types {
+    BEHAVIOR_UNIQUE_REF_ARRAY,
+    BEHAVIOR_APPEND_ARRAY,
+    BEHAVIOR_HASH_COUNT,
+    MAX_BEHAVIOR
+};
 
-#ifdef HAVE_MAGIC_V2
+#ifdef HAVE_VALUE_MAGIC
 #  define ENTER_DISARM_INFECT \
   ENTER;  \
   SAVESPTR(PL_viralmagic_annotations); PL_viralmagic_annotations = NULL
-#endif
 
-#ifdef HAVE_USERTAINT
-#  define ENTER_DISARM_INFECT \
-  ENTER;  \
-  SAVESPTR(PL_usertaint_annotations); PL_usertaint_annotations = NULL
-#endif
-
-#define LEAVE_DISARM_INFECT  \
+#  define LEAVE_DISARM_INFECT \
   LEAVE
 
-/* Common low-level functions for both implementations */
-#ifdef HAVE_HOUNDING
+/*** Structs ***/
 
-#define av_push_dup_if_uniq(av, sv)  S_av_push_dup_if_uniq(aTHX_ av, sv)
-static SV *S_av_push_dup_if_uniq(pTHX_ AV *av, SV *sv)
+struct ValueTagsUserStruct {
+    SV *value_tags;
+};
+
+struct ValueTagsBehavior {
+    SV*  (*make_tags)(pTHX);
+    SV*  (*dup_tags)(pTHX_ SV *tags);
+    void (*free_tags)(pTHX_ SV *sv, MAGIC *mg);   // FIXME: needed?
+    void (*add_tag)(pTHX_ SV *tags, SV *tag);
+    void (*merge_tags)(pTHX_ SV *src_tags, SV *dst_tags);
+    SV*  (*make_retval)(pTHX_ MAGIC *mg);
+};
+
+struct ValueTagsSpec {
+    struct ValueTagsSpec           *next;
+    SV                             *vt_type;
+    const struct ValueTagsBehavior *behavior;
+};
+
+#define VALUETAGS(mg) (MgUSERSTRUCT(mg, struct ValueTagsUserStruct *)->value_tags)
+
+#define VALID_VT_TYPE_REF(ref) (SvROK(ref) && SvTYPE(SvRV(ref)) <= SVt_PVMG)
+#define VALID_AV_TAGS(sv) (SvTYPE(sv) == SVt_PVAV)
+#define VALID_HV_TAGS(sv) (SvTYPE(sv) == SVt_PVHV)
+
+/*** UTILTIIES ***/
+
+static void av_append_tag(pTHX_ AV *av, SV *tag, bool check_uniq)
 {
-  if(SvROK(sv)) {
-    // Skip duplicates
-    U32 idx;
-    SV **svp = AvARRAY(av);
-    for(idx = 0; idx < av_count(av); idx++)
-      if(SvROK(svp[idx]) && SvRV(sv) == SvRV(svp[idx]))
-        return NULL;
-  }
+    assert(VALID_AV_TAGS(sav));
+    assert(SvROK(tag));
 
-  SV *ret = newSVsv(sv);
-  av_push_simple(av, ret);
-  return ret;
-}
-
-/* Declarations for required per-implementation low-level functions */
-#define get_hounding_magic(sv)  S_get_hounding_magic(aTHX_ sv)
-static MAGIC *S_get_hounding_magic(pTHX_ SV *sv);
-
-#define add_hounding_magic(sv, av)  S_add_hounding_magic(aTHX_ sv, av)
-static MAGIC *S_add_hounding_magic(pTHX_ SV *sv, AV *av);
-
-#define remove_hounding_magic(sv)  S_remove_hounding_magic(aTHX_ sv)
-static void S_remove_hounding_magic(pTHX_ SV *sv);
-
-#define get_hounding_av(mg)  S_get_hounding_av(aTHX_ mg)
-static AV *S_get_hounding_av(pTHX_ MAGIC *mg);
-
-/* DEBUG_TRACE logic */
-#ifdef DEBUG_TRACE_ANNOTATIONS
-
-static MGVTBL vtbl_hound_debugtrace = { /* empty */ };
-
-#define make_traceav_orig()  S_make_traceav_orig(aTHX)
-static SV *S_make_traceav_orig(pTHX)
-{
-  ENTER_DISARM_INFECT;
-
-  AV *trace = newAV();
-  av_push(trace, newSVuv(0));
-  av_push(trace, newSVpvf("%s:%d", CopFILE(PL_curcop), CopLINE(PL_curcop)));
-  for(I32 cxix = cxstack_ix; cxix >= 0; cxix--) {
-    if(av_count(trace) > 5)
-      break;
-
-    PERL_CONTEXT *cx = cxstack + cxix;
-    if(CxTYPE(cx) == CXt_SUB) {
-      COP *oldcop = cx->blk_oldcop;
-      av_push(trace, newSVpvf("%s:%d", CopFILE(oldcop), CopLINE(oldcop)));
+    if (check_uniq) {
+        SV **svp = AvARRAY(av);
+        Size_t count = av_count(av);
+        for(U32 idx = 0; idx < count; idx++) {
+            // Skip duplicates
+            if(SvROK(svp[idx]) && SvRV(tag) == SvRV(svp[idx])) {
+                return;
+            }
+        }
     }
-  }
 
-  LEAVE_DISARM_INFECT;
-
-  return (SV *)trace;
+    SV *ret = newSVsv(tag);
+    av_push_simple(av, ret);
 }
 
-#define make_traceav_copy(oann)  S_make_traceav_copy(aTHX_ oann)
-static SV *S_make_traceav_copy(pTHX_ SV *oann)
+static void add_tag_unique_ref_array (pTHX_ SV *tags, SV *tag)
 {
-  if(!SvMAGICAL(oann))
-    return NULL;
+    assert(VALID_AV_TAGS(tags));
+    assert(SvROK(tag));
 
-  ENTER_DISARM_INFECT;
-  MAGIC *omg = mg_findext(oann, PERL_MAGIC_ext, &vtbl_hound_debugtrace);
-  assert(omg);
-
-  AV *ntrace = newAV();
-
-  AV *otrace = (AV *)omg->mg_obj;
-  UV otrace_age = SvUV(AvARRAY(otrace)[0]);
-
-  av_push(ntrace, newSVuv(otrace_age + 1));
-
-  LEAVE_DISARM_INFECT;
-
-  return (SV *)ntrace;
-}
-#endif /* DEBUG_TRACE_ANNOTATIONS */
-
-/* Common mid-level functions, using low-level functions */
-#define setup_hounding_magic(sv)  S_setup_hounding_magic(aTHX_ sv)
-static MAGIC *S_setup_hounding_magic(pTHX_ SV *sv)
-{
-  assert(sv);
-
-  MAGIC *mg = get_hounding_magic(sv);
-
-  if (!mg)
-    mg = add_hounding_magic(sv, newAV());
-
-  return mg;
+    // always check_uniq
+    av_append_tag(aTHX_ (AV *)tags, tag, true);
 }
 
-#define get_hounding_annotations(sv)  S_get_hounding_annotations(aTHX_ sv)
-static AV *S_get_hounding_annotations(pTHX_ SV *sv)
+static void merge_tags_unique_ref_array (pTHX_ SV *src_tags, SV *dst_tags)
 {
-  assert(sv);
+    assert(VALID_AV_TAGS(src_tags));
+    assert(VALID_AV_TAGS(dst_tags));
 
-  MAGIC *mg = get_hounding_magic(sv);
-  if (!mg)
-    return NULL;
+    // no need to check uniqueness if destination has no tags
+    bool check_uniq = av_count((AV *)dst_tags);
 
-  AV *annotations = get_hounding_av(mg);
-
-  return annotations;
-}
-
-#define set_hounding_annotations(mg, sav, replace)  S_set_hounding_annotations(aTHX_ mg, sav, replace)
-#define replace_hounding_annotations(mg, sav) set_hounding_annotations(mg, sav, true)
-#define append_hounding_annotations(mg, sav) set_hounding_annotations(mg, sav, false)
-static void S_set_hounding_annotations(pTHX_ MAGIC *mg, AV *sav, bool replace)
-{
-  assert(mg);
-  assert(sav);
-
-  AV *dav = get_hounding_av(mg);
-  assert(dav);
-  if (replace && av_count(dav))
-    av_clear(dav);
-
-  U32 count = av_count(sav);
-  SV **svp = AvARRAY(sav);
-  for(U32 idx = 0; idx < count; idx++) {
-    SV *new = av_push_dup_if_uniq(dav, svp[idx]);
-#ifdef DEBUG_TRACE_ANNOTATIONS
-    // copying existing annotation: sv will always have debug tracing
-    if(new) {
-      sv_magicext(new, (SV *)make_traceav_copy(svp[idx]), PERL_MAGIC_ext, &vtbl_hound_debugtrace, NULL, 0);
+    AV *src_av = (AV *)src_tags;
+    SV **svp = AvARRAY(src_av);
+    Size_t count = av_count(src_av);
+    for (U32 idx = 0; idx < count; idx++) {
+        av_append_tag(aTHX_ (AV *)dst_tags, svp[idx], check_uniq);
     }
-#endif
-  }
-
 }
 
-#define append_hounding_annotation(mg, sv)  S_append_hounding_annotation(aTHX_ mg, sv)
-static void S_append_hounding_annotation(pTHX_ MAGIC *mg, SV *sv)
+static void add_tag_append_array (pTHX_ SV *tags, SV *tag)
 {
-  assert(mg);
-  assert(sv);
+    assert(VALID_AV_TAGS(tags));
+    assert(SvROK(tag));
 
-  AV *dav = get_hounding_av(mg);
-  assert(dav);
+    // never check_uniq
+    av_append_tag(aTHX_ (AV *)tags, tag, false);
+}
 
-  SV *new = av_push_dup_if_uniq(dav, sv);
+static void merge_tags_append_array (pTHX_ SV *src_tags, SV *dst_tags)
+{
+    assert(VALID_AV_TAGS(src_tags));
+    assert(VALID_AV_TAGS(dst_tags));
+
+    AV *oav = (AV *)src_tags;
+    SV **svp = AvARRAY(oav);
+    Size_t count = av_count(oav);
+    for (U32 idx = 0; idx < count; idx++) {
+        // never check_uniq; always append
+        av_append_tag(aTHX_ (AV *)dst_tags, svp[idx], false);
+    }
+}
+
+static void hv_inc_val (pTHX_ SV *tags, SV *tag, Size_t count)
+{
+    assert(VALID_HV_TAGS(tags));
+    assert(tag);
+
+    HV *hv = (HV *)tags;
+    HE *he = hv_fetch_ent(hv, tag, FALSE, 0);
+
+    if (he) {
+        SV *val = HeVAL(he);
+        SvIV_set(val, SvIV(val) + count);
+    }
+    else {
+        hv_store_ent(hv, tag, newSViv(count), 0);
+    }
+}
+
+static void add_tag_hash_count(pTHX_ SV *tags, SV *tag)
+{
+    assert(VALID_HV_TAGS(tags));
+    assert(tag);
+
+    ENTER_DISARM_INFECT;    // avoid PL_viralmagic_annotations copying of magic
+    hv_inc_val(tags, tag, 1);
+    LEAVE_DISARM_INFECT;
+}
+
+static void merge_tags_hash_count(pTHX_ SV *src_tags, pTHX_ SV *dst_tags)
+{
+    assert(VALID_HV_TAGS(ohv));
+    assert(VALID_HV_TAGS(nhv));
+
+    HV *src_hv = (HV *)src_tags;
+    HV *dst_hv = (HV *)dst_tags;
+
+    hv_iterinit(src_hv);
+
+    HE *src_he;
+    ENTER_DISARM_INFECT;    // avoid PL_viralmagic_annotations copying of magic on hash values
+    while (src_he = hv_iternext(src_hv)) {
+        SV *src_val = HeVAL(src_he);
+        SV **dst_valp = hv_fetch(dst_hv, HeKEY(src_he), HeKLEN(src_he), 0);
+        if (dst_valp && *dst_valp)
+            sv_setiv(*dst_valp, SvIV(src_val) + SvIV(*dst_valp));
+        else
+            hv_store(dst_hv, HeKEY(src_he), HeKLEN(src_he), newSVsv(src_val), HeHASH(src_he));
+    }
+    LEAVE_DISARM_INFECT;
+}
+
+/*** FORWARD DECLARATIONS FOR MAGIC HANDLING ***/
+#define get_value_tags_magic(vt_type, sv)  S_get_value_tags_magic(aTHX_ vt_type, sv)
+static MAGIC *S_get_value_tags_magic(pTHX_ SV *vt_type, SV *sv);
+
+#define add_value_tags_magic(vt_type, sv, value_tags)  S_add_value_tags_magic(aTHX_ vt_type, sv, value_tags)
+static MAGIC *S_add_value_tags_magic(pTHX_ SV *vt_type, SV *sv, SV *value_tags);
+
+#define init_value_tags_magic(vt_type, sv, value_tags)  S_init_value_tags_magic(aTHX_ vt_type, sv, value_tags)
+static MAGIC *S_init_value_tags_magic(pTHX_ SV *vt_type, SV *sv, SV *value_tags);
+
+#define remove_value_tags_magic(vt_type, sv)  S_remove_value_tags_magic(aTHX_ vt_type, sv)
+static MAGIC *S_remove_value_tags_magic(pTHX_ SV *vt_type, SV *sv);
+
+#define get_vt_spec(vt_type) S_get_vt_spec(aTHX_ vt_type)
+static struct ValueTagsSpec *S_get_vt_spec(pTHX_ SV *vt_type);
+
+/*** BEHAVIORS ***/
+
+static SV *make_array_value_tags(pTHX)
+{
+    return (SV *)newAV();
+}
+
+static SV *make_hash_value_tags(pTHX)
+{
+    return (SV *)newHV();
+}
+
+static SV *dup_array_value_tags(pTHX_ SV *value_tags)
+{
+    return (SV *)newAVav((AV *)value_tags);
+}
+
+static SV *dup_hash_value_tags(pTHX_ SV *value_tags)
+{
+    return (SV *)newHVhv((HV *)value_tags);
+}
+
+static void free_value_tags(pTHX_ SV *sv, MAGIC *mg)
+{
+    assert(sv);
+    assert(mg);     // Just In Case
+    SV *vt = VALUETAGS(mg);
+    if (vt) {
+        SvREFCNT_dec(vt);
+        VALUETAGS(mg) = NULL;
+    }
+}
+
+static SV *make_array_retval(pTHX_ MAGIC *mg)
+{
+    assert(mg);
+    SV *vt = VALUETAGS(mg);
+    assert(SvOK(vt) && SvTYPE(vt) == SVt_PVAV);
+
+    AV *results = newAVav((AV *)vt);
+
+    return newRV((SV *)results);
+}
+
+static SV *make_hash_retval(pTHX_ MAGIC *mg)
+{
+    assert(mg);
+
+    SV *vt = VALUETAGS(mg);
+    assert(SvOK(vt) && SvTYPE(vt) == SVt_PVHV);
+    HV *results = newHVhv((HV *)vt);
+
+    return newRV((SV *)results);
+}
+
+static void infect_value_tags(pTHX_ SV *src_sv, MAGIC *src_mg, SV *dst_sv, MAGIC *dst_mg)
+{
+    assert(src_sv);
+    assert(src_mg);
+    assert(dst_sv);
+    assert(!dst_mg);
+
+    SV *src_tags = VALUETAGS(src_mg);
+    if (!src_tags) {
+        return;
+    }
+
+    SV *vt_type = MgAUXSV(src_mg);
+    struct ValueTagsSpec *vt_spec = get_vt_spec(vt_type);
+
+    // dst_mg is never passed in, since MGv2f_SCALARVALUE_INFECTIOUS is not set
+    dst_mg = get_value_tags_magic(vt_type, dst_sv);
+
+    if (dst_mg) {
+        vt_spec->behavior->merge_tags(aTHX_ src_tags, VALUETAGS(dst_mg));
+    }
+    else {
+        SV *dst_tags = vt_spec->behavior->dup_tags(aTHX_ src_tags);
+        add_value_tags_magic(vt_type, dst_sv, dst_tags);
+    }
+}
+
 #ifdef DEBUG_TRACE_ANNOTATIONS
-  // only called from hound_apply(): sv does not have debug tracing
-  if(new) {
-    sv_magicext(new, (SV *)make_traceav_orig(), PERL_MAGIC_ext, &vtbl_hound_debugtrace, NULL, 0);
-  }
+        // FIXME: handle adding trace magic somewhere
+        // copying existing annotation: sv will always have debug tracing
+//      if(new) {
+//          sv_magicext(new, (SV *)make_traceav_copy(svp[idx]), PERL_MAGIC_ext, &vtbl_hound_debugtrace, NULL, 0);
+//      }
 #endif
+
+static const struct ValueTagsBehavior behaviors[] = {
+    [BEHAVIOR_UNIQUE_REF_ARRAY] = {
+        .make_tags   = &make_array_value_tags,
+        .dup_tags    = &dup_array_value_tags,
+        .free_tags   = &free_value_tags,
+        .make_retval = &make_array_retval,
+        .add_tag     = &add_tag_unique_ref_array,
+        .merge_tags  = &merge_tags_unique_ref_array,
+    },
+    [BEHAVIOR_APPEND_ARRAY] = {
+        .make_tags   = &make_array_value_tags,
+        .dup_tags    = &dup_array_value_tags,
+        .free_tags   = &free_value_tags,
+        .make_retval = &make_array_retval,
+        .add_tag     = &add_tag_append_array,
+        .merge_tags  = &merge_tags_append_array,
+    },
+    [BEHAVIOR_HASH_COUNT] = {
+        .make_tags   = &make_hash_value_tags,
+        .dup_tags    = &dup_hash_value_tags,
+        .free_tags   = &free_value_tags,
+        .make_retval = &make_hash_retval,
+        .add_tag     = &add_tag_hash_count,
+        .merge_tags  = &merge_tags_hash_count,
+    },
+};
+
+/*** VALUE-TAGS SPECIFICATIONS ***/
+
+#define MY_CXT_KEY "Scalar::ValueTags::_registry" XS_VERSION
+
+typedef struct {
+    struct ValueTagsSpec *vt_specs;
+    struct ValueTagsSpec *final_vt_spec;
+} my_cxt_t;
+
+START_MY_CXT
+
+// FIXME - must make these thread-safe (is MY_CXT the correct pattern?)
+
+static struct ValueTagsSpec *S_get_vt_spec(pTHX_ SV *vt_type)
+{
+    dMY_CXT;
+    assert(vt_type);
+    for (struct ValueTagsSpec *cur = MY_CXT.vt_specs; cur; cur = cur->next) {
+        if (cur && (cur->vt_type == vt_type)) {
+            return cur;
+        }
+    }
+//  croak("vt_type not registered");
+    return NULL;
 }
 
-#define remove_hounding(sv)  S_remove_hounding(aTHX_ sv)
-static void S_remove_hounding(pTHX_ SV *sv)
+#define set_vt_type_behavior(vt_type, behavior_type) S_set_vt_type_behavior(aTHX_ vt_type, behavior_type)
+static void S_set_vt_type_behavior(pTHX_ SV *vt_type, SV *behavior_type)
 {
-  assert(sv);
+    dMY_CXT;
+    assert(vt_type);
+    assert(behavior_type);
 
-  remove_hounding_magic(sv);
+    const struct ValueTagsBehavior *behavior = &behaviors[SvIV(behavior_type)];
+
+    struct ValueTagsSpec *new_vt_spec;
+    Newx(new_vt_spec, 1, struct ValueTagsSpec);
+    *new_vt_spec = (struct ValueTagsSpec){
+        .next     = NULL,
+        .vt_type  = SvREFCNT_inc(vt_type),
+        .behavior = behavior,
+    };
+
+    if (MY_CXT.vt_specs) {
+        MY_CXT.final_vt_spec->next = new_vt_spec;
+        MY_CXT.final_vt_spec = new_vt_spec;
+    }
+    else {
+        MY_CXT.vt_specs      = new_vt_spec;
+        MY_CXT.final_vt_spec = new_vt_spec;
+    }
 }
 
-#define set_hounding_magic(sv, annotations)  S_set_hounding_magic(aTHX_ sv, annotations)
-static void S_set_hounding_magic(pTHX_ SV *sv, AV *annotations)
+/*** MAGIC ***/
+
+static MAGIC *S_get_value_tags_magic(pTHX_ SV *vt_type, SV *sv)
 {
-  assert(sv);
+    assert(vt_type);
+    assert(sv);
 
-  MAGIC *mg = get_hounding_magic(sv);
+    MAGIC *mg = NULL;
+    if (SvTYPE(sv) >=  SVt_PVMG) {
+        mg = sv_magicv2_find_by_auxsv(sv, vt_type);
+    }
 
-  if (annotations) {
+    return mg;
+}
+
+static const struct ScalarValueMagicFunctions magic_funcs = {
+    .ver       = 2,   /* Magic v2 */
+    .shape     = MGv2s_SCALARVALUE,
+    .free_mg   = &free_value_tags,
+    .infect    = &infect_value_tags,
+    .user_size = sizeof(struct ValueTagsUserStruct),
+};
+
+static MAGIC *S_add_value_tags_magic(pTHX_ SV *vt_type, SV *sv, SV *value_tags)
+{
+    assert(vt_type);
+    assert(sv);
+    assert(!get_value_tags_magic(vt_type, sv));
+
+    struct ValueTagsSpec *vt_spec = get_vt_spec(vt_type);
+
+    // FIXME - detect and handle sv_magicv2_add failure?
+    MAGIC *mg = sv_magicv2_add(sv, (struct MagicFunctions *)&magic_funcs, 0, vt_type);
+
+    // MgAUXSV refcnt is automatically decremented on mg destroy, so inc here
+    SvREFCNT_inc(vt_type);
+
+    if (!value_tags) {
+        value_tags = vt_spec->behavior->make_tags(aTHX);
+    }
+
+    VALUETAGS(mg) = value_tags;
+
+    return mg;
+}
+
+static MAGIC *S_init_value_tags_magic(pTHX_ SV *vt_type, SV *sv, SV *value_tags)
+{
+    assert(vt_type);
+    assert(sv);
+
+    MAGIC *mg = get_value_tags_magic(vt_type, sv);
+
+    if (!mg) {
+        mg = add_value_tags_magic(vt_type, sv, value_tags);
+    }
+
+    return mg;
+}
+
+static MAGIC *S_remove_value_tags_magic(pTHX_ SV *vt_type, SV *sv)
+{
+    assert(vt_type);
+    assert(sv);
+
+    MAGIC *mg = get_value_tags_magic(vt_type, sv);
+
     if (mg) {
-      replace_hounding_annotations(mg, annotations);
-    } else {
-      mg = setup_hounding_magic(sv);
-      append_hounding_annotations(mg, annotations);
+        sv_magicv2_remove(sv, mg);
     }
-  } else if (mg) {
-    remove_hounding_magic(sv);
-  }
 
-  return;
+    // API FIXME - should remove_value_tags_magic return old magic???
+    return mg;
 }
 
-#endif /* HAVE_HOUNDING */
+#endif /* HAVE_VALUE_MAGIC */
 
-/* Magic V2 hooks-based implementation */
-#ifdef HAVE_MAGIC_V2
+/*** API ***/
 
-static const struct ScalarValueHookFunctions hound_hooks;
-#define HOUND_HOOK_FUNCS ((struct HookFunctions *)&hound_hooks)
+#define VALIDATE_VT_TYPE(vt_type_ref) \
+    if (!VALID_VT_TYPE_REF(vt_type_ref)) croak("Invalid vt_type");
 
-static MAGIC *S_get_hounding_magic(pTHX_ SV *sv)
-{
-  assert(sv);
+#define VALIDATE_SV_TARGET(sv_ref) \
+    if (!SvROK(sv_ref) || SvTYPE(SvRV(sv_ref)) > SVt_PVMG) \
+        croak("Expected a SCALAR reference for target variable");
 
-  MAGIC *mg = NULL;
-  if (SvTYPE(sv) >=  SVt_PVMG)
-    mg = sv_hook_find_by_funcs(sv, HOUND_HOOK_FUNCS);
+MODULE = Scalar::ValueTags  PACKAGE = Scalar::ValueTags
 
-  return mg;
-}
-
-static MAGIC *S_add_hounding_magic(pTHX_ SV *sv, AV *av)
-{
-  assert(sv);
-  assert(av);
-
-  MAGIC *mg = sv_hook_add(sv, HOUND_HOOK_FUNCS, 0, (SV *)av);
-  return mg;
-}
-
-static void S_remove_hounding_magic(pTHX_ SV *sv)
-{
-  assert(sv);
-
-  sv_hook_remove_by_funcs(sv, HOUND_HOOK_FUNCS);
-}
-
-static AV *S_get_hounding_av(pTHX_ MAGIC *mg)
-{
-  assert(mg);
-
-  AV *av = (AV *)HkAUXSV(mg);
-  return av;
-}
-
-static void hounding_free(pTHX_ SV *sv, MAGIC *mg)
-{
-    AV *oav = (AV *)HkAUXSV(mg);
-    if (oav)
-      av_undef(oav);
-}
-
-static void hounding_infect(pTHX_ SV *osv, MAGIC *omg, SV *nsv, MAGIC *nmg)
-{
-  AV *oav = (AV *)HkAUXSV(omg);
-  assert(oav);
-  if (!av_count(oav))
-    return;
-
-  // create hook if needed: HKf_SCALARVALUE_INFECTIOUS not set, so no nmg
-  MAGIC *mg = setup_hounding_magic(nsv);
-
-  append_hounding_annotations(mg, oav);
-}
-
-static const struct ScalarValueHookFunctions hound_hooks = {
-    .ver = 12345,    /* TODO */
-    .shape = HKs_SCALARVALUE,
-    .free = hounding_free,
-    .infect = hounding_infect,
-
-    /* FIXME: NEEDED?
-    .clone = ...,
-     */
-};
-
-#endif  /* HAVE_MAGIC_V2 */
-
-/* USERTAINT-based implementation */
-#ifdef HAVE_USERTAINT
-
-static struct mgvtbl_with_copysv vtbl_hounding;
-#define VTBL_HOUNDING ((MGVTBL *)&vtbl_hounding)
-
-static MAGIC *S_get_hounding_magic(pTHX_ SV *sv)
-{
-  assert(sv);
-
-  MAGIC *mg = NULL;
-  if (SvTYPE(sv) >= SVt_PVMG) {
-    mg = mg_findext(sv, PERL_MAGIC_extvalue, VTBL_HOUNDING);
-  }
-
-  return mg;
-}
-
-static MAGIC *S_add_hounding_magic(pTHX_ SV *sv, AV *av)
-{
-  assert(sv);
-  assert(av);
-
-  AV *annotations = newAV();
-  MAGIC *mg = sv_magicext(sv, (SV *)annotations, PERL_MAGIC_extvalue, VTBL_HOUNDING, NULL, 0);
-  mg->mg_flags |= MGf_COPYSV;
-
-  return mg;
-}
-
-static void S_remove_hounding_magic(pTHX_ SV *sv)
-{
-  assert(sv);
-
-  sv_unmagicext(sv, PERL_MAGIC_extvalue, VTBL_HOUNDING);
-}
-
-static AV *S_get_hounding_av(pTHX_ MAGIC *mg)
-{
-  assert(mg);
-
-  AV *av = (AV *)mg->mg_obj;
-  return av;
-}
-
-static int hounding_clear(pTHX_ SV *sv, MAGIC *mg)
-{
-  ENTER_DISARM_INFECT;
-
-  sv_unmagicext(sv, PERL_MAGIC_extvalue, mg->mg_virtual);
-
-  LEAVE_DISARM_INFECT;
-  return 1;
-}
-
-static int hounding_copysv(pTHX_ SV *ssv, MAGIC *mg, SV *dsv)
-{
-  ENTER_DISARM_INFECT;
-
-  AV *sav = (AV *)mg->mg_obj;
-  assert(SvTYPE(sav) == SVt_PVAV);
-
-  set_hounding_magic(dsv, sav);
-
-  LEAVE_DISARM_INFECT;
-  return 1;
-}
-
-static int hounding_get(pTHX_ SV *sv, MAGIC *mg)
-{
-  SV *dsv = PL_usertaint_annotations;
-
-  ENTER_DISARM_INFECT;
-
-  AV *sav = (AV *)mg->mg_obj;
-  assert(SvTYPE(sav) == SVt_PVAV);
-
-  if(!dsv)
-    dsv = newSV(0);
-
-  MAGIC *dmg = setup_hounding_magic(dsv);
-  append_hounding_annotations(dmg, sav); // MUST copy tracing
-
-  LEAVE_DISARM_INFECT;
-  PL_usertaint_annotations = dsv;
-
-  return 1;
-}
-
-static struct mgvtbl_with_copysv vtbl_hounding = {
-  ._vtbl.svt_clear = hounding_clear,
-  ._vtbl.svt_get   = hounding_get,
-  .svt_copysv      = hounding_copysv,
-};
-
-#endif  /* HAVE_USERTAINT */
-
-/* This is used to implement the dollar-digit regexp capture variables */
-
-#ifdef HAVE_USERTAINT
-static int postmatch_copyann_get(pTHX_ SV *sv, MAGIC *mg)
-{
-  REGEXP * const rx = PL_curpm ? PM_GETRE(PL_curpm) : NULL;
-  if(!rx)
-    return 1;
-
-  ENTER_DISARM_INFECT;
-
-  AV *sav = get_hounding_annotations((SV *)rx); // MUST copy tracing
-
-  set_hounding_magic(sv, sav);
-
-  LEAVE_DISARM_INFECT;
-
-  return 1;
-}
-
-static const MGVTBL vtbl_postmatch_copyann = {
-  .svt_get = &postmatch_copyann_get,
-};
-
-#define nparens_high_waterlevel(nparens)  S_nparens_high_waterlevel(aTHX_ nparens)
-static void S_nparens_high_waterlevel(pTHX_ U32 nparens)
-{
-#ifdef MULTIPLICITY
-  /* With MULTIPLICITY builds we need a unique value per interpreter; we'll
-   * store it in PL_modglobal */
-  SV *waterlevel_sv = *hv_fetchs(PL_modglobal, "Scalar::ValueTags/nparens_high_waterlevel", GV_ADD);
-  U32 waterlevel = SvIOK(waterlevel_sv) ? SvIV(waterlevel_sv) : 0;
-#else
-  /* We can take a shortcut. As there's only one, just keep it statically here
-   */
-  static U32 waterlevel;
-#endif
-
-  if(nparens <= waterlevel)
-    return;
-
-  for(U32 i = waterlevel; i < nparens; i++) {
-    SV *varname = sv_2mortal(newSVpvf("%d", i+1)); /* register numbers are 1-based */
-    SV *regbuf_var = get_sv(SvPV_nolen(varname), GV_ADD);
-
-    sv_magicext(regbuf_var, NULL, PERL_MAGIC_ext, &vtbl_postmatch_copyann, NULL, 0);
-  }
-
-  waterlevel = nparens;
-#ifdef MULTIPLICITY
-  sv_setiv(waterlevel_sv, waterlevel);
-#endif
-}
-
-#include "hounded_funcs.c.inc"
-
-#endif /* HAVE_USERTAINT */
-
-/* returns true if the comma-separated list of flags in 's' contains an exact
- * match for 'flag'
- */
-static bool str_includes_flag(const char *s, const char *flag)
-{
-  STRLEN flaglen = strlen(flag);
-  assert(flaglen);
-
-  while(s && *s) {
-    if(strncmp(s, flag, flaglen) == 0 &&
-        (s[flaglen] == ',' || s[flaglen] == 0))
-      return true;
-
-    s = strchr(s, ',');
-    if(!s)
-      return false;
-    while(*s == ',')
-      s++;
-  }
-  return false;
-}
-
-MODULE = Scalar::ValueTags    PACKAGE = Scalar::ValueTags
-
-void
-hound_apply(SV *targref, SV *ann)
+int
+SVTAGS_UNIQUE_REF_ARRAY()
   CODE:
-#ifdef HAVE_HOUNDING
-    if(!SvROK(targref) || SvTYPE(SvRV(targref)) > SVt_PVMG)
-      croak("Expected a SCALAR reference for target");
-    if(!SvROK(ann))
-      croak("Expected the annotation data to be a reference");
+    RETVAL = BEHAVIOR_UNIQUE_REF_ARRAY;
+  OUTPUT:
+    RETVAL
 
-    MAGIC *mg = setup_hounding_magic(SvRV(targref));
-    append_hounding_annotation(mg, ann); // will NOT have tracing
-#endif
-
-void
-hound_query(SV *targref)
-  PPCODE:
-#ifdef HAVE_HOUNDING
-
-    if(!SvROK(targref) || SvTYPE(SvRV(targref)) > SVt_PVMG)
-      croak("Expected a SCALAR reference for target");
-
-    AV *annotations = get_hounding_annotations(SvRV(targref));
-
-    if(!annotations)
-      XSRETURN(0);
-
-    U32 count = av_count(annotations);
-    SV **svp = AvARRAY(annotations);
-
-    if(GIMME_V == G_VOID)
-      Perl_ck_warner(aTHX_ packWARN(WARN_VOID),
-        "Useless use of Scalar::ValueTags::hound_query() in void context");
-
-    if(GIMME_V <= G_SCALAR)
-      XSRETURN_UV(count);
-
-    EXTEND(SP, count);
-
-    U32 idx;
-    for(idx = 0; idx < count; idx++)
-      PUSHs(sv_mortalcopy(svp[idx]));
-    XSRETURN(count);
-#else
-    XSRETURN(0);
-#endif
-
-void
-hound_delete(SV *targref)
+int
+SVTAGS_APPEND_ARRAY()
   CODE:
-#ifdef HAVE_HOUNDING
-    if(!SvROK(targref) || SvTYPE(SvRV(targref)) > SVt_PVMG)
-      croak("Expected a SCALAR reference for target");
-    remove_hounding(SvRV(targref));
+    RETVAL = BEHAVIOR_APPEND_ARRAY;
+  OUTPUT:
+    RETVAL
+
+int
+SVTAGS_HASH_COUNT()
+  CODE:
+    RETVAL = BEHAVIOR_HASH_COUNT;
+  OUTPUT:
+    RETVAL
+
+void
+value_tags_enabled()
+   CODE:
+#ifdef HAVE_VALUE_MAGIC
+    XSRETURN_YES;
+#else
+    XSRETURN_NO;
+#endif
+
+SV *
+register_value_tags_type (SV *behavior)
+  CODE:
+#ifdef HAVE_VALUE_MAGIC
+    if (!SvIOK(behavior))
+      croak("Expected an integer for behavior");    // FIXME: need better error
+    IV idx = SvIV(behavior);
+    if (idx < 0 || idx >= MAX_BEHAVIOR)
+      croak("Unknown behavior"); // FIXME: need better error
+
+    SV *vt_type = newSV(0);
+
+    set_vt_type_behavior(vt_type, behavior);
+
+    RETVAL = newRV(vt_type);
+#else
+    RETVAL = NULL;
+#endif
+  OUTPUT:
+    RETVAL
+
+void
+add_value_tag (SV *vt_type_ref, SV *sv_ref, SV *tag)
+  CODE:
+#ifdef HAVE_VALUE_MAGIC
+    VALIDATE_VT_TYPE(vt_type_ref);
+    VALIDATE_SV_TARGET(sv_ref);
+
+    // FIXME: add tag validation to vt_spec, and validate tag here
+
+    SV *vt_type = SvRV(vt_type_ref);
+    struct ValueTagsSpec *vt_spec = get_vt_spec(vt_type);
+    if (!vt_spec)
+        croak("Unregistered vt_type");
+
+    MAGIC *mg = init_value_tags_magic(vt_type, SvRV(sv_ref), NULL);
+
+    SV *tags = VALUETAGS(mg);
+    vt_spec->behavior->add_tag(aTHX_ tags, tag);
+#endif
+
+SV *
+get_value_tags (SV *vt_type_ref, SV *sv_ref)
+  CODE:
+#ifdef HAVE_VALUE_MAGIC
+    VALIDATE_VT_TYPE(vt_type_ref);
+    VALIDATE_SV_TARGET(sv_ref);
+
+    SV *vt_type = SvRV(vt_type_ref);
+    SV *sv = SvRV(sv_ref);
+
+    MAGIC *mg = get_value_tags_magic(vt_type, sv);
+
+    struct ValueTagsSpec *vt_spec = get_vt_spec(vt_type);
+    if (!vt_spec)
+        croak("Unregistered vt_type");
+
+    if (mg) {
+        RETVAL = vt_spec->behavior->make_retval(aTHX_ mg);
+    }
+    else {
+        RETVAL = NULL;
+    }
+#else
+    RETVAL = NULL;
+#endif
+  OUTPUT:
+    RETVAL
+
+void
+clear_value_tags (SV *vt_type_ref, SV *sv_ref)
+  CODE:
+#ifdef HAVE_VALUE_MAGIC
+    VALIDATE_VT_TYPE(vt_type_ref);
+    VALIDATE_SV_TARGET(sv_ref);
+
+    SV *vt_type = SvRV(vt_type_ref);
+    struct ValueTagsSpec *vt_spec = get_vt_spec(vt_type);
+    if (!vt_spec)
+        croak("Unregistered vt_type");
+
+    SV *sv = SvRV(sv_ref);
+    MAGIC *mg = get_value_tags_magic(vt_type, sv);
+
+    if (mg) {
+        remove_value_tags_magic(vt_type, sv);
+    }
 #endif
 
 void
-hound_tracing_enabled()
+CLONE(...)
   CODE:
-#ifdef DEBUG_TRACE_ANNOTATIONS
-    XSRETURN(1);
-#else
-    XSRETURN(0);
-#endif
+    MY_CXT_CLONE;
 
 BOOT:
-#ifdef HAVE_HOUNDING
-#  ifdef HAVE_USERTAINT
-  const char *disable_flags = getenv("PERL_DATA_HOUNDING_DISABLE");
-#    include "hounded_boot.c.inc"
-#    ifdef HAVE_DMD_HELPER
-  DMD_ADD_ROOT((SV *)&vtbl_hounding, "the Scalar::ValueTags VTBL");
-#    endif
-#  endif
-#  ifdef HAVE_MAGIC_V2
-#    ifdef HAVE_DMD_HELPER
-  DMD_ADD_ROOT((SV *)&hound_hooks, "the Scalar::ValueTags Hook");
-#    endif
-#  endif
-#  ifdef DEBUG_TRACE_ANNOTATIONS
-  DMD_ADD_ROOT((SV *)&vtbl_hound_debugtrace, "the Scalar::ValueTags debug trace VTBL");
-#  endif
-#endif
+{
+    MY_CXT_INIT;
+    MY_CXT.vt_specs = NULL;
+    MY_CXT.final_vt_spec = NULL;
+}
