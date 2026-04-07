@@ -391,13 +391,11 @@ static void S_set_vt_type_behavior(pTHX_ SV *vt_type, SV *behavior)
     struct ValueTagsBehaviorVtbl behavior_vtbl = behavior_vtbls[(int)SvIV(behavior)];
 
     fprintf(stderr, ">S_set_vt_type_behavor\n");
-    fprintf(stderr, "  SvREFCNT_inc: 0x%x\n", vt_type);
-    SvREFCNT_inc(vt_type);
     struct ValueTagsSpec *new_vt_spec;
     Newx(new_vt_spec, 1, struct ValueTagsSpec);
     *new_vt_spec = (struct ValueTagsSpec){
         .next            = NULL,
-        .vt_type         = vt_type,
+        .vt_type         = SvREFCNT_inc(vt_type),
         .make_value_tags = behavior_vtbl.make_value_tags,
         .make_retval     = behavior_vtbl.make_retval,
         .add_tag         = behavior_vtbl.add_tag,
