@@ -286,7 +286,7 @@ void infect_hash_count(pTHX_ SV *osv, MAGIC *omg, SV *nsv, MAGIC *nmg)
 
     // vt_type is stored in AUXSV
     if (!nmg)
-        nmg = init_value_tags_magic(nsv, MgAUXSV(omg));
+        nmg = init_value_tags_magic(MgAUXSV(omg), nsv);
 
     HV *nhv = (HV *)VALUETAGS(nmg);
 
