@@ -141,7 +141,7 @@ static void free_value_tags(pTHX_ SV *sv, MAGIC *mg)
     fprintf(stderr, "<free_array_value_tags\n");
 }
 
-static SV *make_hash_value_tags(pTHX_)
+static SV *make_hash_value_tags(pTHX)
 {
     HV *hv = newHV();
     return (SV *)hv;
@@ -315,7 +315,7 @@ void infect_hash_count(pTHX_ SV *osv, MAGIC *omg, SV *nsv, MAGIC *nmg)
 }
 
 struct ValueTagsBehaviorVtbl {
-    SV*  (*make_value_tags)(pTHX_);
+    SV*  (*make_value_tags)(pTHX);
     void (*free_value_tags)(pTHX_ SV *sv, MAGIC *mg);
     SV*  (*add_tag)(pTHX_ SV *sv, SV *tag);
     SV*  (*make_retval)(pTHX_ MAGIC *mg);
