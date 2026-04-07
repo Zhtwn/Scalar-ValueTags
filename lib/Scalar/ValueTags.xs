@@ -322,27 +322,29 @@ struct ValueTagsBehaviorVtbl {
     void (*infect_magic)(pTHX_ SV *osv, MAGIC *omg, SV *nsv, MAGIC *nmg);
 };
 
-#define BEHAVIOR_UNIQUE_REF_ARRAY 0
-#define BEHAVIOR_APPEND_ARRAY     1
-#define BEHAVIOR_HASH_COUNT       2
-#define MAX_BEHAVIOR              3
+enum behavior_types {
+    BEHAVIOR_UNIQUE_REF_ARRAY,
+    BEHAVIOR_APPEND_ARRAY,
+    BEHAVIOR_HASH_COUNT,
+    MAX_BEHAVIOR
+};
 
 static const struct ValueTagsBehaviorVtbl behavior_vtbls[] = {
-    {
+    [BEHAVIOR_UNIQUE_REF_ARRAY] = {
         .make_value_tags = make_array_value_tags,
         .free_value_tags = free_value_tags,
         .make_retval     = make_array_retval,
         .add_tag         = av_append_uniq,
         .infect_magic    = infect_uniq_ref_array,
     },
-    {
+    [BEHAVIOR_APPEND_ARRAY] = {
         .make_value_tags = make_array_value_tags,
         .free_value_tags = free_value_tags,
         .make_retval     = make_array_retval,
         .add_tag         = av_append,
         .infect_magic    = infect_append_array,
     },
-    {
+    [BEHAVIOR_HASH_COUNT] = {
         .make_value_tags = make_hash_value_tags,
         .free_value_tags = free_value_tags,
         .make_retval     = make_hash_retval,
@@ -350,7 +352,6 @@ static const struct ValueTagsBehaviorVtbl behavior_vtbls[] = {
         .infect_magic    = infect_hash_count,
     },
 };
-static const int behavior_count = sizeof(behavior_vtbls) / sizeof(behavior_vtbls[0]);
 
 /*** VALUE-TAGS SPECIFICATIONS ***/
 
