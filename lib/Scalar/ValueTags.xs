@@ -372,8 +372,7 @@ static struct ValueTagsSpec *S_get_vt_spec(pTHX_ SV *vt_type)
 {
     fprintf(stderr, ">S_get_vt_spec\n");
     fprintf(stderr, "  vt_type: 0x%x\n", vt_type);
-    struct ValueTagsSpec *cur;
-    for (cur = vt_specs; cur; cur = cur->next) {
+    for (struct ValueTagsSpec *cur = vt_specs; cur; cur = cur->next) {
         fprintf(stderr, "  next cur\n");
         if (cur && (cur->vt_type == vt_type)) {
             fprintf(stderr, "<S_get_vt_spec: return found\n");
