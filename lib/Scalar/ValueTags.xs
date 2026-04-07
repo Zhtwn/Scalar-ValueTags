@@ -127,16 +127,16 @@ static SV *make_array_value_tags(pTHX)
     return (SV *)av;
 }
 
-// FIXME - is this needed?
-static void free_array_value_tags(pTHX_ SV *sv, MAGIC *mg)
+static void free_value_tags(pTHX_ SV *sv, MAGIC *mg)
 {
     assert(mg);
     fprintf(stderr, ">free_array_value_tags\n");
     fprintf(stderr, "  VALUETAGS\n");
-    AV *av = (AV *)VALUETAGS(mg);
-    if (av) {
-        fprintf(stderr, "  av_clear\n");
-        av_clear(av);
+    SV *vt = VALUETAGS(mg);
+    if (vt) {
+        fprintf(stderr, "  SvREFCNT_DEC\n");
+        SvREFCNT_dec(vt);
+        VALUETAGS(mg) = NULL;
     }
     fprintf(stderr, "<free_array_value_tags\n");
 }
@@ -145,15 +145,6 @@ static SV *make_hash_value_tags(pTHX_)
 {
     HV *hv = newHV();
     return (SV *)hv;
-}
-
-// FIXME - is this needed?
-static void free_hash_value_tags(pTHX_ SV *sv, MAGIC *mg)
-{
-    assert(mg);
-    HV *hv = (HV *)VALUETAGS(mg);
-    if (hv)
-        hv_clear(hv);
 }
 
 static SV *make_array_retval(pTHX_ MAGIC *mg)
@@ -339,21 +330,21 @@ struct ValueTagsBehaviorVtbl {
 static const struct ValueTagsBehaviorVtbl behavior_vtbls[] = {
     {
         .make_value_tags = make_array_value_tags,
-        .free_value_tags = free_array_value_tags,
+        .free_value_tags = free_value_tags,
         .make_retval     = make_array_retval,
         .add_tag         = av_append_uniq,
         .infect_magic    = infect_uniq_ref_array,
     },
     {
         .make_value_tags = make_array_value_tags,
-        .free_value_tags = free_array_value_tags,
+        .free_value_tags = free_value_tags,
         .make_retval     = make_array_retval,
         .add_tag         = av_append,
         .infect_magic    = infect_append_array,
     },
     {
         .make_value_tags = make_hash_value_tags,
-        .free_value_tags = free_hash_value_tags,
+        .free_value_tags = free_value_tags,
         .make_retval     = make_hash_retval,
         .add_tag         = hv_inc_count,
         .infect_magic    = infect_hash_count,
