@@ -33,11 +33,13 @@
 #define LEAVE_DISARM_INFECT  \
   LEAVE
 
-#define MgVALUETAGS(mg) (MgUSERSTRUCT(mg, struct ValueTagsUserStruct *)->value_tags)
+/*** Structs ***/
 
 struct ValueTagsUserStruct {
     SV *value_tags;
 };
+
+#define MgVALUETAGS(mg) (MgUSERSTRUCT(mg, struct ValueTagsUserStruct *)->value_tags)
 
 /*** UTILTIIES ***/
 
