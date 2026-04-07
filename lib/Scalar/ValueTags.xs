@@ -468,7 +468,7 @@ static MAGIC *S_init_value_tags_magic(pTHX_ SV *vt_type, SV *sv)
         SvREFCNT_inc(vt_type);
 
         fprintf(stderr, "  make_value_tags\n");
-        SV *value_tags = vt_spec->make_value_tags(aTHX_);
+        SV *value_tags = vt_spec->make_value_tags(aTHX);
         fprintf(stderr, "  set VALUETAGS\n");
         VALUETAGS(mg) = value_tags;
     }
