@@ -39,7 +39,7 @@ struct ValueTagsUserStruct {
     SV *value_tags;
 };
 
-#define MgVALUETAGS(mg) (MgUSERSTRUCT(mg, struct ValueTagsUserStruct *)->value_tags)
+#define VALUETAGS(mg) (MgUSERSTRUCT(mg, struct ValueTagsUserStruct *)->value_tags)
 
 /*** UTILTIIES ***/
 
@@ -132,8 +132,8 @@ static void free_array_value_tags(pTHX_ SV *sv, MAGIC *mg)
 {
     assert(mg);
     fprintf(stderr, ">free_array_value_tags\n");
-    fprintf(stderr, "  MgVALUETAGS\n");
-    AV *av = (AV *)MgVALUETAGS(mg);
+    fprintf(stderr, "  VALUETAGS\n");
+    AV *av = (AV *)VALUETAGS(mg);
     if (av) {
         fprintf(stderr, "  av_clear\n");
         av_clear(av);
@@ -151,7 +151,7 @@ static SV *make_hash_value_tags(pTHX_)
 static void free_hash_value_tags(pTHX_ SV *sv, MAGIC *mg)
 {
     assert(mg);
-    HV *hv = (HV *)MgVALUETAGS(mg);
+    HV *hv = (HV *)VALUETAGS(mg);
     if (hv)
         hv_clear(hv);
 }
@@ -160,8 +160,8 @@ static SV *make_array_retval(pTHX_ MAGIC *mg)
 {
     assert(mg);
     fprintf(stderr, ">make_array_retval\n");
-    fprintf(stderr, "  MgVALUETAGS\n");
-    AV *av = (AV *)MgVALUETAGS(mg);
+    fprintf(stderr, "  VALUETAGS\n");
+    AV *av = (AV *)VALUETAGS(mg);
 
     U32 count = av_count(av);
     fprintf(stderr, "  count: %u\n", count);
@@ -176,7 +176,7 @@ static SV *make_hash_retval(pTHX_ MAGIC *mg)
 {
     assert(mg);
 
-    HV *results = newHVhv((HV *)MgVALUETAGS(mg));
+    HV *results = newHVhv((HV *)VALUETAGS(mg));
 
     return (SV *)results;
 }
@@ -192,7 +192,7 @@ void infect_uniq_ref_array(pTHX_ SV *osv, MAGIC *omg, SV *nsv, MAGIC *nmg)
     fprintf(stderr, "  osv: 0x%x\n", osv);
     fprintf(stderr, "  nsv: 0x%x\n", nsv);
 
-    fprintf(stderr, "  omg count: %u\n", av_count((AV *)MgVALUETAGS(omg)));
+    fprintf(stderr, "  omg count: %u\n", av_count((AV *)VALUETAGS(omg)));
 
     SV *vt_type = MgAUXSV(omg);
 
@@ -202,20 +202,20 @@ void infect_uniq_ref_array(pTHX_ SV *osv, MAGIC *omg, SV *nsv, MAGIC *nmg)
     if (!nmg) {
         fprintf(stderr, "  init_value_tags_magic\n");
         nmg = init_value_tags_magic(vt_type, nsv);
-        fprintf(stderr, "  copying MgVALUETAGS\n");
-        MgVALUETAGS(nmg) = (SV *)newAVav((AV *)MgVALUETAGS(omg));
+        fprintf(stderr, "  copying VALUETAGS\n");
+        VALUETAGS(nmg) = (SV *)newAVav((AV *)VALUETAGS(omg));
         fprintf(stderr, "<infect_uniq_ref_array\n");
         return;
     }
 
-    fprintf(stderr, "  MgVALUETAGS\n");
-    AV *oav = (AV *)MgVALUETAGS(omg);
+    fprintf(stderr, "  VALUETAGS\n");
+    AV *oav = (AV *)VALUETAGS(omg);
     assert(oav);
     U32 count = av_count(oav);
     if (!count)
         return;
 
-    AV *nav = (AV *)MgVALUETAGS(nmg);
+    AV *nav = (AV *)VALUETAGS(nmg);
 
     SV **svp = AvARRAY(oav);
     for(U32 idx = 0; idx < count; idx++) {
@@ -243,14 +243,14 @@ void infect_append_array(pTHX_ SV *osv, MAGIC *omg, SV *nsv, MAGIC *nmg)
     fprintf(stderr, "  osv: 0x%x\n", osv);
     fprintf(stderr, "  nsv: 0x%x\n", nsv);
 
-    AV *oav = (AV *)MgVALUETAGS(omg);
+    AV *oav = (AV *)VALUETAGS(omg);
     U32 count = av_count(oav);
     if (!count)
         return;
 
     SV *vt_type = MgAUXSV(omg);
 
-    fprintf(stderr, "  omg count: %u\n", av_count((AV *)MgVALUETAGS(omg)));
+    fprintf(stderr, "  omg count: %u\n", av_count((AV *)VALUETAGS(omg)));
 
     // nmg is never set, since MGv2f_SCALARVALUE_INFECTIOUS is not set
     nmg = get_value_tags_magic(vt_type, nsv);
@@ -258,15 +258,15 @@ void infect_append_array(pTHX_ SV *osv, MAGIC *omg, SV *nsv, MAGIC *nmg)
     if (!nmg) {
         fprintf(stderr, "  init_value_tags_magic\n");
         nmg = init_value_tags_magic(MgAUXSV(omg), nsv);
-        fprintf(stderr, "  copying MgVALUETAGS\n");
+        fprintf(stderr, "  copying VALUETAGS\n");
 //      ENTER_DISARM_INFECT;
-        MgVALUETAGS(nmg) = (SV *)newAVav((AV *)MgVALUETAGS(omg));
+        VALUETAGS(nmg) = (SV *)newAVav((AV *)VALUETAGS(omg));
 //      LEAVE_DISARM_INFECT;
         fprintf(stderr, "<infect_append_array\n");
         return;
     }
 
-    AV *nav = (AV *)MgVALUETAGS(nmg);
+    AV *nav = (AV *)VALUETAGS(nmg);
     SV **svp = AvARRAY(oav);
     for(U32 idx = 0; idx < count; idx++) {
         fprintf(stderr, "  idx %u: 0x%x\n", idx, svp[idx]);
@@ -287,7 +287,7 @@ void infect_hash_count(pTHX_ SV *osv, MAGIC *omg, SV *nsv, MAGIC *nmg)
     assert(omg);
     assert(nsv);
 
-    HV *ohv = (HV *)MgVALUETAGS(omg);
+    HV *ohv = (HV *)VALUETAGS(omg);
     assert(ohv);
 
     if (!hv_iterinit(ohv))
@@ -297,7 +297,7 @@ void infect_hash_count(pTHX_ SV *osv, MAGIC *omg, SV *nsv, MAGIC *nmg)
     if (!nmg)
         nmg = init_value_tags_magic(nsv, MgAUXSV(omg));
 
-    HV *nhv = (HV *)MgVALUETAGS(nmg);
+    HV *nhv = (HV *)VALUETAGS(nmg);
 
     assert(nhv);
 
@@ -478,8 +478,8 @@ static MAGIC *S_init_value_tags_magic(pTHX_ SV *vt_type, SV *sv)
 
         fprintf(stderr, "  make_value_tags\n");
         SV *value_tags = vt_spec->make_value_tags(aTHX_);
-        fprintf(stderr, "  set MgVALUETAGS\n");
-        MgVALUETAGS(mg) = value_tags;
+        fprintf(stderr, "  set VALUETAGS\n");
+        VALUETAGS(mg) = value_tags;
     }
 
     fprintf(stderr, "<S_init_value_tags_magic: return magic\n");
@@ -584,7 +584,7 @@ add_value_tag (SV *vt_type_ref, SV *sv_ref, SV *tag)
     struct ValueTagsSpec *vt_spec = get_vt_spec(vt_type);
 
     fprintf(stderr, "  vt_spec->add_tag\n");
-    vt_spec->add_tag(aTHX_ MgVALUETAGS(mg), tag);
+    vt_spec->add_tag(aTHX_ VALUETAGS(mg), tag);
 
     fprintf(stderr, "<add_value_tag\n");
 #endif
