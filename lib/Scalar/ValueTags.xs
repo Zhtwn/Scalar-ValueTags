@@ -119,7 +119,7 @@ static MAGIC *S_remove_value_tags_magic(pTHX_ SV *vt_type, SV *sv);
 
 /*** BEHAVIORS ***/
 
-static SV *make_array_value_tags(pTHX_)
+static SV *make_array_value_tags(pTHX)
 {
     AV *av = newAV();
     return (SV *)av;
