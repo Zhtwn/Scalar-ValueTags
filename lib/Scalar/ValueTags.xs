@@ -356,12 +356,12 @@ static const struct ValueTagsBehaviorVtbl behavior_vtbls[] = {
 /*** VALUE-TAGS SPECIFICATIONS ***/
 
 struct ValueTagsSpec {
-    struct ValueTagsSpec             *next;
-    SV                               *vt_type;
-    SV                               *(*make_value_tags)();
-    SV                               *(*make_retval)(pTHX_ MAGIC *mg);
-    SV                               *(*add_tag)(pTHX_ SV *sv, SV *tag);
-    struct ScalarValueMagicFunctions magic_funcs;
+    struct ValueTagsSpec                   *next;
+    SV                                     *vt_type;
+    SV                                     *(*make_value_tags)();
+    SV                                     *(*make_retval)(pTHX_ MAGIC *mg);
+    SV                                     *(*add_tag)(pTHX_ SV *sv, SV *tag);
+    const struct ScalarValueMagicFunctions *magic_funcs;
 };
 
 static struct ValueTagsSpec *vt_specs = NULL;
@@ -391,6 +391,19 @@ static void S_set_vt_type_behavior(pTHX_ SV *vt_type, SV *behavior)
     struct ValueTagsBehaviorVtbl behavior_vtbl = behavior_vtbls[(int)SvIV(behavior)];
 
     fprintf(stderr, ">S_set_vt_type_behavor\n");
+    struct ScalarValueMagicFunctions *magic_funcs;
+    Newx(magic_funcs, 1, struct ScalarValueMagicFunctions);
+    *magic_funcs = (struct ScalarValueMagicFunctions){
+        .ver       = 2, /* Magic v2 */
+        .shape     = MGv2s_SCALARVALUE,
+        .free_mg   = behavior_vtbl.free_value_tags,
+        .infect    = behavior_vtbl.infect_magic,
+        .user_size = sizeof(struct ValueTagsUserStruct),
+
+        /* FIXME: NEEDED?
+        .clone = ...,
+        */
+    };
     struct ValueTagsSpec *new_vt_spec;
     Newx(new_vt_spec, 1, struct ValueTagsSpec);
     *new_vt_spec = (struct ValueTagsSpec){
@@ -399,17 +412,7 @@ static void S_set_vt_type_behavior(pTHX_ SV *vt_type, SV *behavior)
         .make_value_tags = behavior_vtbl.make_value_tags,
         .make_retval     = behavior_vtbl.make_retval,
         .add_tag         = behavior_vtbl.add_tag,
-        .magic_funcs     = (struct ScalarValueMagicFunctions) {
-            .ver       = 2, /* Magic v2 */
-            .shape     = MGv2s_SCALARVALUE,
-            .free_mg   = behavior_vtbl.free_value_tags,
-            .infect    = behavior_vtbl.infect_magic,
-            .user_size = sizeof(struct ValueTagsUserStruct),
-
-            /* FIXME: NEEDED?
-            .clone = ...,
-            */
-        }
+        .magic_funcs     = magic_funcs,
     };
 
     if (vt_specs) {
@@ -456,11 +459,10 @@ static MAGIC *S_init_value_tags_magic(pTHX_ SV *vt_type, SV *sv)
         fprintf(stderr, "  get_vt_spec\n");
         struct ValueTagsSpec *vt_spec = get_vt_spec(vt_type);
         fprintf(stderr, "  get magic_funcs\n");
-        struct ScalarValueMagicFunctions *magic_funcs = &(vt_spec->magic_funcs);
 
         // FIXME - detect and handle sv_magicv2_add failure?
         fprintf(stderr, "  sv_magicv2_add\n");
-        mg = sv_magicv2_add(sv, (struct MagicFunctions *)magic_funcs, 0, vt_type);
+        mg = sv_magicv2_add(sv, (struct MagicFunctions *)vt_spec->magic_funcs, 0, vt_type);
 
         // SvAUX refcnt is automatically decremented on mg destroy, so inc here
         SvREFCNT_inc(vt_type);
