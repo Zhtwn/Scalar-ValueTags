@@ -113,8 +113,8 @@ static SV *hv_inc_count(pTHX_ SV *shv, SV *tag)
 #define get_value_tags_magic(vt_type, sv)  S_get_value_tags_magic(aTHX_ vt_type, sv)
 static MAGIC *S_get_value_tags_magic(pTHX_ SV *vt_type, SV *sv);
 
-#define init_value_tags_magic(vt_type, sv)  S_init_value_tags_magic(aTHX_ vt_type, sv)
-static MAGIC *S_init_value_tags_magic(pTHX_ SV *vt_type, SV *sv);
+#define init_value_tags_magic(vt_type, sv, value_tags)  S_init_value_tags_magic(aTHX_ vt_type, sv, value_tags)
+static MAGIC *S_init_value_tags_magic(pTHX_ SV *vt_type, SV *sv, SV *value_tags);
 
 #define remove_value_tags_magic(vt_type, sv)  S_remove_value_tags_magic(aTHX_ vt_type, sv)
 static MAGIC *S_remove_value_tags_magic(pTHX_ SV *vt_type, SV *sv);
@@ -192,9 +192,8 @@ void infect_uniq_ref_array(pTHX_ SV *osv, MAGIC *omg, SV *nsv, MAGIC *nmg)
 
     if (!nmg) {
         fprintf(stderr, "  init_value_tags_magic\n");
-        nmg = init_value_tags_magic(vt_type, nsv);
-        fprintf(stderr, "  copying VALUETAGS\n");
-        VALUETAGS(nmg) = (SV *)newAVav((AV *)VALUETAGS(omg));
+        SV *value_tags = (SV *)newAVav((AV *)VALUETAGS(omg));
+        nmg = init_value_tags_magic(vt_type, nsv, value_tags);
         fprintf(stderr, "<infect_uniq_ref_array\n");
         return;
     }
@@ -248,11 +247,8 @@ void infect_append_array(pTHX_ SV *osv, MAGIC *omg, SV *nsv, MAGIC *nmg)
 
     if (!nmg) {
         fprintf(stderr, "  init_value_tags_magic\n");
-        nmg = init_value_tags_magic(MgAUXSV(omg), nsv);
-        fprintf(stderr, "  copying VALUETAGS\n");
-//      ENTER_DISARM_INFECT;
-        VALUETAGS(nmg) = (SV *)newAVav((AV *)VALUETAGS(omg));
-//      LEAVE_DISARM_INFECT;
+        SV *value_tags = (SV *)newAVav((AV *)VALUETAGS(omg));
+        nmg = init_value_tags_magic(MgAUXSV(omg), nsv, value_tags);
         fprintf(stderr, "<infect_append_array\n");
         return;
     }
@@ -286,7 +282,7 @@ void infect_hash_count(pTHX_ SV *osv, MAGIC *omg, SV *nsv, MAGIC *nmg)
 
     // vt_type is stored in AUXSV
     if (!nmg)
-        nmg = init_value_tags_magic(MgAUXSV(omg), nsv);
+        nmg = init_value_tags_magic(MgAUXSV(omg), nsv, NULL);
 
     HV *nhv = (HV *)VALUETAGS(nmg);
 
@@ -446,7 +442,8 @@ static MAGIC *S_get_value_tags_magic(pTHX_ SV *vt_type, SV *sv)
     return mg;
 }
 
-static MAGIC *S_init_value_tags_magic(pTHX_ SV *vt_type, SV *sv)
+// FIXME - what happens if value_tags is passed but sv already has magic?
+static MAGIC *S_init_value_tags_magic(pTHX_ SV *vt_type, SV *sv, SV *value_tags)
 {
     assert(sv);
     assert(vt_type);
@@ -468,7 +465,9 @@ static MAGIC *S_init_value_tags_magic(pTHX_ SV *vt_type, SV *sv)
         SvREFCNT_inc(vt_type);
 
         fprintf(stderr, "  make_value_tags\n");
-        SV *value_tags = vt_spec->make_value_tags(aTHX);
+        if (!value_tags)
+            value_tags = vt_spec->make_value_tags(aTHX);
+
         fprintf(stderr, "  set VALUETAGS\n");
         VALUETAGS(mg) = value_tags;
     }
@@ -568,7 +567,7 @@ add_value_tag (SV *vt_type_ref, SV *sv_ref, SV *tag)
     fprintf(stderr, "init_value_tags_magic\n");
     fprintf(stderr, "  vt_type_ref: 0x%x\n", vt_type_ref);
     fprintf(stderr, "  vt_type: 0x%x\n", vt_type);
-    MAGIC *mg = init_value_tags_magic(vt_type, SvRV(sv_ref));
+    MAGIC *mg = init_value_tags_magic(vt_type, SvRV(sv_ref), NULL);
     if (mg) { fprintf(stderr, "  got mg\n"); } else { fprintf(stderr, "  NO mg\n"); }
 
     fprintf(stderr, "  get_vt_spec\n");
