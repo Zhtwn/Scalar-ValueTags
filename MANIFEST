@@ -14,6 +14,7 @@ t/13pmops.t
 t/20ctrlops.t
 t/21try.t
 t/30overload.t
+t/40behavior-uniq-ref-array.t
 t/82devel-mat-dumper-helper.t
 t/83devel-debug-trace.t
 t/90sum0.t
