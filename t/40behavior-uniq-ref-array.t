@@ -34,12 +34,21 @@ my $vt_type;
 {
     my $var_one = 123;
     my $tag_one = { tag => 'one' };
+    say STDERR "NCM DEBUG: add tag on var_one";
     add_value_tag( $vt_type, \$var_one, $tag_one );
+
+    is( get_value_tags( $vt_type, \$var_one ), [$tag_one],
+        'get_value_tags on first variable should be correct' );
 
     my $var_two = 456;
     my $tag_two = { tag => 'two' };
+    say STDERR "NCM DEBUG: add tag on var_two";
     add_value_tag( $vt_type, \$var_two, $tag_two );
 
+    is( get_value_tags( $vt_type, \$var_two ), [$tag_two],
+        'get_value_tags on second variable should be correct' );
+
+    say STDERR "NCM DEBUG: combine var_one and var_two";
     my $combined = $var_one + $var_two;
     say STDERR "NCM DEBUG: done combining var_one and var_two";
 

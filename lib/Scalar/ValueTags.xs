@@ -39,11 +39,28 @@ struct ValueTagsUserStruct {
     SV *value_tags;
 };
 
+struct ValueTagsBehavior {
+    SV*  (*make_tags)(pTHX);
+    SV*  (*dup_tags)(pTHX_ SV *value_tags);
+    void (*free_tags)(pTHX_ SV *sv, MAGIC *mg);   // FIXME: needed?
+    void (*add_tag)(pTHX_ SV *sv, SV *tag);
+    SV*  (*make_retval)(pTHX_ MAGIC *mg);
+    void (*iter_begin)(pTHX_ SV *value_tags, void **ctx);
+    SV*  (*iter_next)(pTHX_ SV *value_tags, void **ctx);
+    void (*iter_end)(pTHX_ SV *value_tags, void **ctx);
+};
+
+struct ValueTagsSpec {
+    struct ValueTagsSpec           *next;
+    SV                             *vt_type;
+    const struct ValueTagsBehavior *behavior;
+};
+
 #define VALUETAGS(mg) (MgUSERSTRUCT(mg, struct ValueTagsUserStruct *)->value_tags)
 
 /*** UTILTIIES ***/
 
-static SV *av_append_uniq(pTHX_ SV *sav, SV *tag)
+void av_append_uniq(pTHX_ SV *sav, SV *tag)
 {
     assert(sav);
     assert(tag);
@@ -65,29 +82,31 @@ static SV *av_append_uniq(pTHX_ SV *sav, SV *tag)
     for(U32 idx = 0; idx < av_count(av); idx++) {
         // Skip duplicates
         if(SvROK(svp[idx]) && SvRV(tag) == SvRV(svp[idx])) {
-            return NULL;
+            return;
         }
     }
 
     fprintf(stderr, "  append new tag\n");
+    fprintf(stderr, "  newSVsv\n");
     SV *ret = newSVsv(tag);
+    fprintf(stderr, "  av_push_simple\n");
     av_push_simple(av, ret);
 
     fprintf(stderr, "<av_append_uniq\n");
-    return ret;
+    return;
 }
 
-static SV *av_append(pTHX_ SV *sav, SV *tag)
+void av_append(pTHX_ SV *sav, SV *tag)
 {
     assert(sav);
     assert(tag);
 
     SV *new_tag = newSVsv(tag);
     av_push_simple((AV *)sav, new_tag);
-    return new_tag;
+    return;
 }
 
-static SV *hv_inc_count(pTHX_ SV *shv, SV *tag)
+void hv_inc_count(pTHX_ SV *shv, SV *tag)
 {
     assert(shv);
     assert(tag);
@@ -106,7 +125,7 @@ static SV *hv_inc_count(pTHX_ SV *shv, SV *tag)
     ret = newSViv(count);
     hv_store_ent(hv, tag, ret, 0);
 
-    return ret;
+    return;
 }
 
 /*** FORWARD DECLARATIONS FOR MAGIC HANDLING ***/
@@ -119,18 +138,41 @@ static MAGIC *S_init_value_tags_magic(pTHX_ SV *vt_type, SV *sv, SV *value_tags)
 #define remove_value_tags_magic(vt_type, sv)  S_remove_value_tags_magic(aTHX_ vt_type, sv)
 static MAGIC *S_remove_value_tags_magic(pTHX_ SV *vt_type, SV *sv);
 
+#define get_vt_spec(vt_type) S_get_vt_spec(aTHX_ vt_type)
+static struct ValueTagsSpec *S_get_vt_spec(pTHX_ SV *vt_type);
+
 /*** BEHAVIORS ***/
 
 static SV *make_array_value_tags(pTHX)
 {
+    fprintf(stderr, ">make_array_value_tags\n");
     AV *av = newAV();
+    fprintf(stderr, "<make_array_value_tags\n");
     return (SV *)av;
+}
+
+static SV *make_hash_value_tags(pTHX)
+{
+    fprintf(stderr, ">make_hash_value_tags\n");
+    HV *hv = newHV();
+    fprintf(stderr, "<make_hash_value_tags\n");
+    return (SV *)hv;
+}
+
+static SV *dup_array_value_tags(pTHX_ SV *value_tags)
+{
+    return (SV *)newAVav((AV *)value_tags);
+}
+
+static SV *dup_hash_value_tags(pTHX_ SV *value_tags)
+{
+    return (SV *)newHVhv((HV *)value_tags);
 }
 
 static void free_value_tags(pTHX_ SV *sv, MAGIC *mg)
 {
     assert(mg);
-    fprintf(stderr, ">free_array_value_tags\n");
+    fprintf(stderr, ">free_value_tags: sv: 0x%x\n", sv);
     fprintf(stderr, "  VALUETAGS\n");
     SV *vt = VALUETAGS(mg);
     if (vt) {
@@ -138,28 +180,20 @@ static void free_value_tags(pTHX_ SV *sv, MAGIC *mg)
         SvREFCNT_dec(vt);
         VALUETAGS(mg) = NULL;
     }
-    fprintf(stderr, "<free_array_value_tags\n");
-}
-
-static SV *make_hash_value_tags(pTHX)
-{
-    HV *hv = newHV();
-    return (SV *)hv;
+    fprintf(stderr, "<free_value_tags\n");
 }
 
 static SV *make_array_retval(pTHX_ MAGIC *mg)
 {
     assert(mg);
     fprintf(stderr, ">make_array_retval\n");
-    fprintf(stderr, "  VALUETAGS\n");
+//  fprintf(stderr, "  VALUETAGS\n");
     AV *av = (AV *)VALUETAGS(mg);
 
-    U32 count = av_count(av);
-    fprintf(stderr, "  count: %u\n", count);
-    fprintf(stderr, "  results: newAVav\n");
+//  fprintf(stderr, "  results: newAVav\n");
     AV *results = newAVav(av);
 
-    fprintf(stderr, "<make_array_retval\n");
+    fprintf(stderr, "<make_array_retval: 0x%x\n", (SV *)results);
     return (SV *)results;
 }
 
@@ -172,45 +206,47 @@ static SV *make_hash_retval(pTHX_ MAGIC *mg)
     return (SV *)results;
 }
 
-void infect_uniq_ref_array(pTHX_ SV *osv, MAGIC *omg, SV *nsv, MAGIC *nmg)
+void infect_value_tags(pTHX_ SV *osv, MAGIC *omg, SV *nsv, MAGIC *nmg)
 {
-//  ENTER_DISARM_INFECT;
+    ENTER_DISARM_INFECT;
     assert(osv);
     assert(omg);
     assert(nsv);
 
-    fprintf(stderr, ">infect_uniq_ref_array\n");
-    fprintf(stderr, "  osv: 0x%x\n", osv);
-    fprintf(stderr, "  nsv: 0x%x\n", nsv);
-
-    fprintf(stderr, "  omg count: %u\n", av_count((AV *)VALUETAGS(omg)));
+    fprintf(stderr, ">infect_value_tags: osv: 0x%x, nsv: 0x%x\n", osv, nsv);
 
     SV *vt_type = MgAUXSV(omg);
+    struct ValueTagsSpec *vt_spec = get_vt_spec(vt_type);
 
     // nmg is never set, since MGv2f_SCALARVALUE_INFECTIOUS is not set
     nmg = get_value_tags_magic(vt_type, nsv);
 
     if (!nmg) {
-        fprintf(stderr, "  init_value_tags_magic\n");
-        SV *value_tags = (SV *)newAVav((AV *)VALUETAGS(omg));
+        fprintf(stderr, "  dup_tags\n");
+        SV *value_tags = vt_spec->behavior->dup_tags(aTHX_ VALUETAGS(omg));
         nmg = init_value_tags_magic(vt_type, nsv, value_tags);
-        fprintf(stderr, "<infect_uniq_ref_array\n");
+        LEAVE_DISARM_INFECT;
+        fprintf(stderr, "<infect_value_tags\n");
         return;
     }
 
-    fprintf(stderr, "  VALUETAGS\n");
-    AV *oav = (AV *)VALUETAGS(omg);
-    assert(oav);
-    U32 count = av_count(oav);
-    if (!count)
-        return;
+    SV *ovt = VALUETAGS(omg);
+    void *ctx;
+    vt_spec->behavior->iter_begin(aTHX_ ovt, &ctx);
+        fprintf(stderr, "OOOOOOF\n");
+        SV *oof = newSVsv(osv);
+    SV *tag;
+    fprintf(stderr, "  iter_next: ovt: 0x%x\n", ovt);
+    while (tag = vt_spec->behavior->iter_next(aTHX_ ovt, &ctx)) {
+        fprintf(stderr, "SvTYPE(tag): %d\n", SvTYPE(tag));
+        // FIXME FIXME FIXME - why is SvTYPE(tag) == SVt_NULL ????
+        fprintf(stderr, "FOOOOOO\n");
+        SV *foo = newSVsv(tag);
+        fprintf(stderr, "  add_tag: nsv: 0x%x, tag: 0x%x\n", nsv, tag);
+        vt_spec->behavior->add_tag(aTHX_ VALUETAGS(nmg), tag);
+    }
+    vt_spec->behavior->iter_end(aTHX_ ovt, &ctx);
 
-    AV *nav = (AV *)VALUETAGS(nmg);
-
-    SV **svp = AvARRAY(oav);
-    for(U32 idx = 0; idx < count; idx++) {
-        fprintf(stderr, "  idx %u: 0x%x\n", idx, svp[idx]);
-        SV *new = av_append_uniq(aTHX_ (SV *)nav, svp[idx]);
 #ifdef DEBUG_TRACE_ANNOTATIONS
         // FIXME: handle adding trace magic somewhere
         // copying existing annotation: sv will always have debug tracing
@@ -218,105 +254,81 @@ void infect_uniq_ref_array(pTHX_ SV *osv, MAGIC *omg, SV *nsv, MAGIC *nmg)
 //          sv_magicext(new, (SV *)make_traceav_copy(svp[idx]), PERL_MAGIC_ext, &vtbl_hound_debugtrace, NULL, 0);
 //      }
 #endif
-    }
-//  LEAVE_DISARM_INFECT;
-    fprintf(stderr, "<infect_uniq_ref_array\n");
+
+    LEAVE_DISARM_INFECT;
+    fprintf(stderr, "<infect_value_tags\n");
 }
 
-void infect_append_array(pTHX_ SV *osv, MAGIC *omg, SV *nsv, MAGIC *nmg)
+static void iter_begin_array (pTHX_ SV *value_tags, void **ctx)
 {
-    assert(osv);
-    assert(omg);
-    assert(nsv);
-
-    fprintf(stderr, ">infect_append_array\n");
-    fprintf(stderr, "  osv: 0x%x\n", osv);
-    fprintf(stderr, "  nsv: 0x%x\n", nsv);
-
-    AV *oav = (AV *)VALUETAGS(omg);
-    U32 count = av_count(oav);
-    if (!count)
-        return;
-
-    SV *vt_type = MgAUXSV(omg);
-
-    fprintf(stderr, "  omg count: %u\n", av_count((AV *)VALUETAGS(omg)));
-
-    // nmg is never set, since MGv2f_SCALARVALUE_INFECTIOUS is not set
-    nmg = get_value_tags_magic(vt_type, nsv);
-
-    if (!nmg) {
-        fprintf(stderr, "  init_value_tags_magic\n");
-        SV *value_tags = (SV *)newAVav((AV *)VALUETAGS(omg));
-        nmg = init_value_tags_magic(MgAUXSV(omg), nsv, value_tags);
-        fprintf(stderr, "<infect_append_array\n");
-        return;
-    }
-
-    AV *nav = (AV *)VALUETAGS(nmg);
-    SV **svp = AvARRAY(oav);
-    for(U32 idx = 0; idx < count; idx++) {
-        fprintf(stderr, "  idx %u: 0x%x\n", idx, svp[idx]);
-        SV *new = av_append(aTHX_ (SV *)nav, svp[idx]);
-#ifdef DEBUG_TRACE_ANNOTATIONS
-        // FIXME: handle adding trace magic somewhere
-        // copying existing annotation: sv will always have debug tracing
-//      if(new) {
-//          sv_magicext(new, (SV *)make_traceav_copy(svp[idx]), PERL_MAGIC_ext, &vtbl_hound_debugtrace, NULL, 0);
-//      }
-#endif
-  }
+    fprintf(stderr, ">iter_begin_array: vt: 0x%x, *ctx: 0x%x\n", value_tags, *ctx);
+    AV *av = (AV *)value_tags;
+    SSize_t *idx;
+    Newx(idx, 1, SSize_t); // or Newxz?
+    *idx = 0;
+    *ctx = (void *)idx;
+    fprintf(stderr, "<iter_begin_array: *idx: %d, *ctx: 0x%x\n", *idx, *ctx);
 }
 
-void infect_hash_count(pTHX_ SV *osv, MAGIC *omg, SV *nsv, MAGIC *nmg)
+static SV *iter_next_array (pTHX_ SV *value_tags, void **ctx)
 {
-    assert(osv);
-    assert(omg);
-    assert(nsv);
-
-    HV *ohv = (HV *)VALUETAGS(omg);
-    assert(ohv);
-
-    if (!hv_iterinit(ohv))
-        return;
-
-    // vt_type is stored in AUXSV
-    if (!nmg)
-        nmg = init_value_tags_magic(MgAUXSV(omg), nsv, NULL);
-
-    HV *nhv = (HV *)VALUETAGS(nmg);
-
-    assert(nhv);
-
-    HE *oentry;
-    while (oentry = hv_iternext(ohv)) {
-        SV *oval = hv_iterval(ohv, oentry);
-        SV *key = HeSVKEY(oentry);
-        IV ncount = SvIV(oval);
-        HE *nentry = hv_fetch_ent(nhv, key, FALSE, 0);
-        if (nentry) {
-            SV *nval = hv_iterval(nhv, nentry);
-            ncount += SvIV(nval);
-        }
-        hv_store_ent(nhv, key, newSViv(ncount), 0);
-
-#ifdef DEBUG_TRACE_ANNOTATIONS
-        // FIXME: handle adding trace magic somewhere
-        // copying existing annotation: sv will always have debug tracing
-//      if(new) {
-//          sv_magicext(new, (SV *)make_traceav_copy(svp[idx]), PERL_MAGIC_ext, &vtbl_hound_debugtrace, NULL, 0);
-//      }
-#endif
+    fprintf(stderr, ">iter_next_array: vt: 0x%x, *ctx: 0x%x\n", value_tags, *ctx);
+    AV *av = (AV *)value_tags;
+    SSize_t *idx = (SSize_t *)*ctx;
+    fprintf(stderr, "  *idx: %d, av_count: %d\n", *idx, av_count(av));
+    if (*idx >= av_count(av)) {
+        fprintf(stderr, "  DONE\n");
+        return NULL;
     }
+    fprintf(stderr, "  av_fetch: idx: %d\n", *idx);
+    SV **tag_ref = av_fetch(av, *idx, 0);
+    if (!tag_ref)
+        croak("iter_next_array: av_fetch returned null");
+    fprintf(stderr, "    SvType(*tag_ref): %d\n", SvTYPE(*tag_ref));
+    SV *tag = *tag_ref;
+    fprintf(stderr, "  (*idx)++\n");
+    (*idx)++;
+    fprintf(stderr, "  tag: 0x%x\n", tag);
+    fprintf(stderr, "<iter_next_array: *idx: %d **ctx: %d\n", *idx, *((SSize_t *)*ctx));
+    return tag;
 }
 
-struct ValueTagsBehaviorVtbl {
-    SV*  (*make_value_tags)(pTHX);
-    void (*free_value_tags)(pTHX_ SV *sv, MAGIC *mg);
-    SV*  (*add_tag)(pTHX_ SV *sv, SV *tag);
-    SV*  (*make_retval)(pTHX_ MAGIC *mg);
-    void (*infect_magic)(pTHX_ SV *osv, MAGIC *omg, SV *nsv, MAGIC *nmg);
+static void iter_end_array (pTHX_ SV *value_tags, void **ctx)
+{
+    Safefree(*ctx);
+}
+
+static void iter_begin_hash (pTHX_ SV *value_tags, void **ctx)
+{
+    HV *hv = (HV *)value_tags;
+
+    // save hash count in ctx, to avoid calling hv_iternext on empty hash (FIXME: is this necessary?)
+    I32 *cnt;
+    Newx(cnt, 1, I32);
+    *cnt = hv_iterinit(hv);
+    *ctx = (void *)cnt;
 };
+
+static SV *iter_next_hash (pTHX_ SV *value_tags, void **ctx)
+{
+    HV *hv = (HV *)value_tags;
+    I32 *cnt = (I32 *)*ctx;
+
+    if (!*cnt)
+        return NULL;
+
+    HE *he = hv_iternext(hv);
+
+    if (!he)
+        return NULL;
+
+    return hv_iterval(hv, he);
+}
+
+static void iter_end_hash (pTHX_ SV *value_tags, void **ctx)
+{
+    Safefree(*ctx);
+}
 
 enum behavior_types {
     BEHAVIOR_UNIQUE_REF_ARRAY,
@@ -325,90 +337,77 @@ enum behavior_types {
     MAX_BEHAVIOR
 };
 
-static const struct ValueTagsBehaviorVtbl behavior_vtbls[] = {
+static const struct ValueTagsBehavior behaviors[] = {
     [BEHAVIOR_UNIQUE_REF_ARRAY] = {
-        .make_value_tags = make_array_value_tags,
-        .free_value_tags = free_value_tags,
-        .make_retval     = make_array_retval,
-        .add_tag         = av_append_uniq,
-        .infect_magic    = infect_uniq_ref_array,
+        .make_tags   = &make_array_value_tags,
+        .dup_tags    = &dup_array_value_tags,
+        .free_tags   = &free_value_tags,
+        .make_retval = &make_array_retval,
+        .add_tag     = &av_append_uniq,
+        .iter_begin  = &iter_begin_array,
+        .iter_next   = &iter_next_array,
+        .iter_end    = &iter_end_array,
     },
     [BEHAVIOR_APPEND_ARRAY] = {
-        .make_value_tags = make_array_value_tags,
-        .free_value_tags = free_value_tags,
-        .make_retval     = make_array_retval,
-        .add_tag         = av_append,
-        .infect_magic    = infect_append_array,
+        .make_tags   = &make_array_value_tags,
+        .dup_tags    = &dup_array_value_tags,
+        .free_tags   = &free_value_tags,
+        .make_retval = &make_array_retval,
+        .add_tag     = &av_append,
+        .iter_begin  = &iter_begin_array,
+        .iter_next   = &iter_next_array,
+        .iter_end    = &iter_end_array,
     },
     [BEHAVIOR_HASH_COUNT] = {
-        .make_value_tags = make_hash_value_tags,
-        .free_value_tags = free_value_tags,
-        .make_retval     = make_hash_retval,
-        .add_tag         = hv_inc_count,
-        .infect_magic    = infect_hash_count,
+        .make_tags   = &make_hash_value_tags,
+        .dup_tags    = &dup_hash_value_tags,
+        .free_tags   = &free_value_tags,
+        .make_retval = &make_hash_retval,
+        .add_tag     = &hv_inc_count,
+        .iter_begin  = &iter_begin_hash,
+        .iter_next   = &iter_next_hash,
+        .iter_end    = &iter_end_hash,
     },
 };
 
 /*** VALUE-TAGS SPECIFICATIONS ***/
 
-struct ValueTagsSpec {
-    struct ValueTagsSpec                   *next;
-    SV                                     *vt_type;
-    SV                                     *(*make_value_tags)();
-    SV                                     *(*make_retval)(pTHX_ MAGIC *mg);
-    SV                                     *(*add_tag)(pTHX_ SV *sv, SV *tag);
-    const struct ScalarValueMagicFunctions *magic_funcs;
-};
-
 static struct ValueTagsSpec *vt_specs = NULL;
 static struct ValueTagsSpec *final_vt_spec = NULL;
 
-#define get_vt_spec(vt_type) S_get_vt_spec(aTHX_ vt_type)
 static struct ValueTagsSpec *S_get_vt_spec(pTHX_ SV *vt_type)
 {
-    fprintf(stderr, ">S_get_vt_spec\n");
-    fprintf(stderr, "  vt_type: 0x%x\n", vt_type);
+//  fprintf(stderr, ">S_get_vt_spec: vt_type: 0x%x\n", vt_type);
     for (struct ValueTagsSpec *cur = vt_specs; cur; cur = cur->next) {
-        fprintf(stderr, "  next cur\n");
+//      fprintf(stderr, "  next cur\n");
         if (cur && (cur->vt_type == vt_type)) {
-            fprintf(stderr, "<S_get_vt_spec: return found\n");
+//          fprintf(stderr, "<S_get_vt_spec: 0x%x\n", cur);
             return cur;
         }
     }
-    fprintf(stderr, "<S_get_vt_spec: return NOT found\n");
+//  fprintf(stderr, "<S_get_vt_spec: 0x0\n");
 //  croak("vt_type not registered");
     return NULL;
 }
 
-#define set_vt_type_behavior(vt_type, behavior_idx) S_set_vt_type_behavior(aTHX_ vt_type, behavior_idx)
-static void S_set_vt_type_behavior(pTHX_ SV *vt_type, SV *behavior)
+#define set_vt_type_behavior(vt_type, behavior_type) S_set_vt_type_behavior(aTHX_ vt_type, behavior_type)
+static void S_set_vt_type_behavior(pTHX_ SV *vt_type, SV *behavior_type)
 {
     // FIXME - validate parameters
-    struct ValueTagsBehaviorVtbl behavior_vtbl = behavior_vtbls[(int)SvIV(behavior)];
-
     fprintf(stderr, ">S_set_vt_type_behavor\n");
-    struct ScalarValueMagicFunctions *magic_funcs;
-    Newx(magic_funcs, 1, struct ScalarValueMagicFunctions);
-    *magic_funcs = (struct ScalarValueMagicFunctions){
-        .ver       = 2, /* Magic v2 */
-        .shape     = MGv2s_SCALARVALUE,
-        .free_mg   = behavior_vtbl.free_value_tags,
-        .infect    = behavior_vtbl.infect_magic,
-        .user_size = sizeof(struct ValueTagsUserStruct),
+    fprintf(stderr, "  behavior_type: %d\n", SvIV(behavior_type));
+//  struct ValueTagsBehavior *behavior = behaviors[(int)SvIV(behavior_type)];
+    const struct ValueTagsBehavior *behavior = &behaviors[SvIV(behavior_type)];
+    fprintf(stderr, "  behavior: 0x%x\n", behavior);
+    fprintf(stderr, "  behavior->make_tags: 0x%x\n", behavior->make_tags);
 
-        /* FIXME: NEEDED?
-        .clone = ...,
-        */
-    };
     struct ValueTagsSpec *new_vt_spec;
     Newx(new_vt_spec, 1, struct ValueTagsSpec);
+    fprintf(stderr, "  new_vt_spec: 0x%x\n", new_vt_spec);
     *new_vt_spec = (struct ValueTagsSpec){
-        .next            = NULL,
-        .vt_type         = SvREFCNT_inc(vt_type),
-        .make_value_tags = behavior_vtbl.make_value_tags,
-        .make_retval     = behavior_vtbl.make_retval,
-        .add_tag         = behavior_vtbl.add_tag,
-        .magic_funcs     = magic_funcs,
+        .next     = NULL,
+        .vt_type  = SvREFCNT_inc(vt_type),
+        .behavior = behavior,
     };
 
     if (vt_specs) {
@@ -429,18 +428,26 @@ static MAGIC *S_get_value_tags_magic(pTHX_ SV *vt_type, SV *sv)
 {
     assert(sv);
     assert(vt_type);
-    fprintf(stderr, ">S_get_value_tags_magic\n");
+    fprintf(stderr, ">S_get_value_tags_magic: sv: 0x%x\n", sv);
 
     MAGIC *mg = NULL;
     if (SvTYPE(sv) >=  SVt_PVMG) {
-    fprintf(stderr, "  find magic\n");
+//  fprintf(stderr, "  find magic\n");
         mg = sv_magicv2_find_by_auxsv(sv, vt_type);
-        if (mg) fprintf(stderr, "  found magic\n"); else fprintf(stderr, "  no magic found\n");
+//      if (mg) fprintf(stderr, "  found magic\n"); else fprintf(stderr, "  no magic found\n");
     }
 
     if (mg) fprintf(stderr, "<S_get_value_tags_magic: return magic\n"); else fprintf(stderr, "<S_get_value_tags_magic: NO magic\n");
     return mg;
 }
+
+static const struct ScalarValueMagicFunctions magic_funcs = {
+    .ver       = 2,   /* Magic v2 */
+    .shape     = MGv2s_SCALARVALUE,
+    .free_mg   = &free_value_tags,
+    .infect    = &infect_value_tags,
+    .user_size = sizeof(struct ValueTagsUserStruct),
+};
 
 // FIXME - what happens if value_tags is passed but sv already has magic?
 static MAGIC *S_init_value_tags_magic(pTHX_ SV *vt_type, SV *sv, SV *value_tags)
@@ -449,24 +456,28 @@ static MAGIC *S_init_value_tags_magic(pTHX_ SV *vt_type, SV *sv, SV *value_tags)
     assert(vt_type);
     fprintf(stderr, "<S_init_value_tags_magic\n");
 
-    fprintf(stderr, "  get_value_tags_magic\n");
+//  fprintf(stderr, "  get_value_tags_magic\n");
     MAGIC *mg = get_value_tags_magic(vt_type, sv);
     if (mg) fprintf(stderr, "  found magic\n");
     if (!mg) {
-        fprintf(stderr, "  get_vt_spec\n");
+//      fprintf(stderr, "  get_vt_spec\n");
         struct ValueTagsSpec *vt_spec = get_vt_spec(vt_type);
-        fprintf(stderr, "  get magic_funcs\n");
+//      fprintf(stderr, "  vt_spec: 0x%x\n", vt_spec);
 
         // FIXME - detect and handle sv_magicv2_add failure?
         fprintf(stderr, "  sv_magicv2_add\n");
-        mg = sv_magicv2_add(sv, (struct MagicFunctions *)vt_spec->magic_funcs, 0, vt_type);
+        mg = sv_magicv2_add(sv, (struct MagicFunctions *)&magic_funcs, 0, vt_type);
 
         // SvAUX refcnt is automatically decremented on mg destroy, so inc here
         SvREFCNT_inc(vt_type);
 
-        fprintf(stderr, "  make_value_tags\n");
-        if (!value_tags)
-            value_tags = vt_spec->make_value_tags(aTHX);
+        if (!value_tags) {
+            fprintf(stderr, "  make_tags\n");
+            fprintf(stderr, "    vt_spec->behavior: 0x%x\n", vt_spec->behavior);
+            fprintf(stderr, "    vt_spec->behavior->make_tags: 0x%x\n", vt_spec->behavior->make_tags);
+            value_tags = vt_spec->behavior->make_tags(aTHX);
+            fprintf(stderr, "  tags: 0x%x\n", value_tags);
+        }
 
         fprintf(stderr, "  set VALUETAGS\n");
         VALUETAGS(mg) = value_tags;
@@ -535,14 +546,19 @@ SV *
 register_value_tags_type (SV *behavior)
   CODE:
 #ifdef HAVE_VALUE_MAGIC
+    fprintf(stderr, ">register_value_tags_type\n");
     if (!SvIOK(behavior))
       croak("Expected an integer for behavior");    // FIXME: need better error
+    fprintf(stderr, "  behavior: %d\n", behavior);
     IV idx = SvIV(behavior);
+    fprintf(stderr, "  idx: %d\n", idx);
     if (idx >= MAX_BEHAVIOR)
       croak("Unknown behavior"); // FIXME: need better error
 
     SV *vt_type = newSV(0);
+    fprintf(stderr, "  vt_type: 0x%x\n", vt_type);
 
+    fprintf(stderr, "  set_vt_type_behavior\n");
     set_vt_type_behavior(vt_type, behavior);
 
     RETVAL = newRV(vt_type);
@@ -558,23 +574,20 @@ add_value_tag (SV *vt_type_ref, SV *sv_ref, SV *tag)
 #ifdef HAVE_VALUE_MAGIC
     if (!SvROK(sv_ref) || SvTYPE(SvRV(sv_ref)) > SVt_PVMG)
         croak("Expected a SCALAR reference for target variable");
-    fprintf(stderr, ">add_value_tag\n");
+    fprintf(stderr, ">add_value_tag: sv: 0x%x, tag: 0x%x\n", SvRV(sv_ref), tag);
 
     // FIXME: add tag validation to vt_spec, and validate tag here
 
-    fprintf(stderr, "  sv: 0x%x\n", SvRV(sv_ref));
     SV *vt_type = SvRV(vt_type_ref);
-    fprintf(stderr, "init_value_tags_magic\n");
-    fprintf(stderr, "  vt_type_ref: 0x%x\n", vt_type_ref);
-    fprintf(stderr, "  vt_type: 0x%x\n", vt_type);
+    fprintf(stderr, "init_value_tags_magic: vt_type_ref: 0x%x, vt_type: 0x%x\n", vt_type_ref, vt_type);
     MAGIC *mg = init_value_tags_magic(vt_type, SvRV(sv_ref), NULL);
     if (mg) { fprintf(stderr, "  got mg\n"); } else { fprintf(stderr, "  NO mg\n"); }
 
     fprintf(stderr, "  get_vt_spec\n");
     struct ValueTagsSpec *vt_spec = get_vt_spec(vt_type);
 
-    fprintf(stderr, "  vt_spec->add_tag\n");
-    vt_spec->add_tag(aTHX_ VALUETAGS(mg), tag);
+    fprintf(stderr, "  vt_spec->behavior->add_tag\n");
+    vt_spec->behavior->add_tag(aTHX_ VALUETAGS(mg), tag);
 
     fprintf(stderr, "<add_value_tag\n");
 #endif
@@ -586,7 +599,7 @@ get_value_tags (SV *vt_type_ref, SV *sv_ref)
     if (!SvROK(sv_ref) || SvTYPE(SvRV(sv_ref)) > SVt_PVMG)
         croak("Expected a SCALAR reference for target variable");
 
-    fprintf(stderr, ">get_value_tags\n");
+    fprintf(stderr, ">get_value_tags: sv: 0x%x\n", SvIV(sv_ref));
     SV *vt_type = SvRV(vt_type_ref);
     fprintf(stderr, "  deref sv_ref\n");
     SV *sv = SvRV(sv_ref);
@@ -601,19 +614,18 @@ get_value_tags (SV *vt_type_ref, SV *sv_ref)
 
     if (mg) {
         fprintf(stderr, "  has magic\n");
-        RETVAL = newRV(vt_spec->make_retval(aTHX_ mg));
-//      RETVAL = vt_spec->make_retval(aTHX_ mg);
+        RETVAL = newRV(vt_spec->behavior->make_retval(aTHX_ mg));
+//      RETVAL = vt_spec->behavior->make_retval(aTHX_ mg);
     }
     else {
         fprintf(stderr, "  NO magic\n");
-        fprintf(stderr, "<get_value_tags: undef\n");
         RETVAL = NULL;
     }
 #else
     fprintf(stderr, "  ValueTags not enabled\n");
-    fprintf(stderr, "<get_value_tags: undef\n");
     RETVAL = NULL;
 #endif
+    fprintf(stderr, "<get_value_tags: RETVAL: 0x%x\n", RETVAL);
   OUTPUT:
     RETVAL
 
