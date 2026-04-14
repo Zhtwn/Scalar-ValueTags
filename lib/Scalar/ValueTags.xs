@@ -132,6 +132,9 @@ void hv_inc_count(pTHX_ SV *shv, SV *tag)
 #define get_value_tags_magic(vt_type, sv)  S_get_value_tags_magic(aTHX_ vt_type, sv)
 static MAGIC *S_get_value_tags_magic(pTHX_ SV *vt_type, SV *sv);
 
+#define add_value_tags_magic(vt_type, sv, value_tags)  S_add_value_tags_magic(aTHX_ vt_type, sv, value_tags)
+static MAGIC *S_add_value_tags_magic(pTHX_ SV *vt_type, SV *sv, SV *value_tags);
+
 #define init_value_tags_magic(vt_type, sv, value_tags)  S_init_value_tags_magic(aTHX_ vt_type, sv, value_tags)
 static MAGIC *S_init_value_tags_magic(pTHX_ SV *vt_type, SV *sv, SV *value_tags);
 
@@ -222,6 +225,7 @@ void infect_value_tags(pTHX_ SV *osv, MAGIC *omg, SV *nsv, MAGIC *nmg)
     nmg = get_value_tags_magic(vt_type, nsv);
 
     if (!nmg) {
+        // FIXME - dup_tags repeats value tags check done in get_value_tags_magic
         fprintf(stderr, "  dup_tags\n");
         SV *value_tags = vt_spec->behavior->dup_tags(aTHX_ VALUETAGS(omg));
         nmg = init_value_tags_magic(vt_type, nsv, value_tags);
@@ -449,7 +453,40 @@ static const struct ScalarValueMagicFunctions magic_funcs = {
     .user_size = sizeof(struct ValueTagsUserStruct),
 };
 
-// FIXME - what happens if value_tags is passed but sv already has magic?
+static MAGIC *S_add_value_tags_magic(pTHX_ SV *vt_type, SV *sv, SV *value_tags)
+{
+    assert(sv);
+    assert(vt_type);
+    assert(!get_value_tags_magic(vt_type, sv));
+
+    fprintf(stderr, "<S_add_value_tags_magic\n");
+
+//  fprintf(stderr, "  get_vt_spec\n");
+    struct ValueTagsSpec *vt_spec = get_vt_spec(vt_type);
+//  fprintf(stderr, "  vt_spec: 0x%x\n", vt_spec);
+
+    // FIXME - detect and handle sv_magicv2_add failure?
+    fprintf(stderr, "  sv_magicv2_add\n");
+    MAGIC *mg = sv_magicv2_add(sv, (struct MagicFunctions *)&magic_funcs, 0, vt_type);
+
+    // SvAUX refcnt is automatically decremented on mg destroy, so inc here
+    SvREFCNT_inc(vt_type);
+
+    if (!value_tags) {
+        fprintf(stderr, "  make_tags\n");
+        fprintf(stderr, "    vt_spec->behavior: 0x%x\n", vt_spec->behavior);
+        fprintf(stderr, "    vt_spec->behavior->make_tags: 0x%x\n", vt_spec->behavior->make_tags);
+        value_tags = vt_spec->behavior->make_tags(aTHX);
+        fprintf(stderr, "  tags: 0x%x\n", value_tags);
+    }
+
+    fprintf(stderr, "  set VALUETAGS\n");
+    VALUETAGS(mg) = value_tags;
+
+    fprintf(stderr, "<S_add_value_tags_magic: return magic\n");
+    return mg;
+}
+
 static MAGIC *S_init_value_tags_magic(pTHX_ SV *vt_type, SV *sv, SV *value_tags)
 {
     assert(sv);
@@ -458,29 +495,9 @@ static MAGIC *S_init_value_tags_magic(pTHX_ SV *vt_type, SV *sv, SV *value_tags)
 
 //  fprintf(stderr, "  get_value_tags_magic\n");
     MAGIC *mg = get_value_tags_magic(vt_type, sv);
-    if (mg) fprintf(stderr, "  found magic\n");
+
     if (!mg) {
-//      fprintf(stderr, "  get_vt_spec\n");
-        struct ValueTagsSpec *vt_spec = get_vt_spec(vt_type);
-//      fprintf(stderr, "  vt_spec: 0x%x\n", vt_spec);
-
-        // FIXME - detect and handle sv_magicv2_add failure?
-        fprintf(stderr, "  sv_magicv2_add\n");
-        mg = sv_magicv2_add(sv, (struct MagicFunctions *)&magic_funcs, 0, vt_type);
-
-        // SvAUX refcnt is automatically decremented on mg destroy, so inc here
-        SvREFCNT_inc(vt_type);
-
-        if (!value_tags) {
-            fprintf(stderr, "  make_tags\n");
-            fprintf(stderr, "    vt_spec->behavior: 0x%x\n", vt_spec->behavior);
-            fprintf(stderr, "    vt_spec->behavior->make_tags: 0x%x\n", vt_spec->behavior->make_tags);
-            value_tags = vt_spec->behavior->make_tags(aTHX);
-            fprintf(stderr, "  tags: 0x%x\n", value_tags);
-        }
-
-        fprintf(stderr, "  set VALUETAGS\n");
-        VALUETAGS(mg) = value_tags;
+        mg = add_value_tags_magic(vt_type, sv, value_tags);
     }
 
     fprintf(stderr, "<S_init_value_tags_magic: return magic\n");
