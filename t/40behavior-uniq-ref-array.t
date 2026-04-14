@@ -41,6 +41,7 @@ my $vt_type;
     add_value_tag( $vt_type, \$var_two, $tag_two );
 
     my $combined = $var_one + $var_two;
+    say STDERR "NCM DEBUG: done combining var_one and var_two";
 
     # FIXME: is tag order deterministic in implementation?
     is( get_value_tags( $vt_type, \$combined ), [ $tag_one, $tag_two ],
