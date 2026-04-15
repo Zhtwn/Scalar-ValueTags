@@ -235,8 +235,6 @@ void infect_value_tags(pTHX_ SV *osv, MAGIC *omg, SV *nsv, MAGIC *nmg)
     SV *ovt = VALUETAGS(omg);
     void *ctx;
     vt_spec->behavior->iter_begin(aTHX_ ovt, &ctx);
-        fprintf(stderr, "OOOOOOF\n");
-        SV *oof = newSVsv(osv);
     SV *tag;
     fprintf(stderr, "  iter_next: ovt: 0x%x\n", ovt);
     while (tag = vt_spec->behavior->iter_next(aTHX_ ovt, &ctx)) {
