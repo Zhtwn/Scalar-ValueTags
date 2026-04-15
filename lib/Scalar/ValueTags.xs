@@ -569,7 +569,7 @@ register_value_tags_type (SV *behavior)
     fprintf(stderr, "  behavior: %d\n", behavior);
     IV idx = SvIV(behavior);
     fprintf(stderr, "  idx: %d\n", idx);
-    if (idx >= MAX_BEHAVIOR)
+    if (idx < 0 || idx >= MAX_BEHAVIOR)
       croak("Unknown behavior"); // FIXME: need better error
 
     SV *vt_type = newSV(0);
