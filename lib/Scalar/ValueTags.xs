@@ -388,7 +388,6 @@ static void S_set_vt_type_behavior(pTHX_ SV *vt_type, SV *behavior_type)
     // FIXME - validate parameters
     fprintf(stderr, ">S_set_vt_type_behavor\n");
     fprintf(stderr, "  behavior_type: %d\n", SvIV(behavior_type));
-//  struct ValueTagsBehavior *behavior = behaviors[(int)SvIV(behavior_type)];
     const struct ValueTagsBehavior *behavior = &behaviors[SvIV(behavior_type)];
     fprintf(stderr, "  behavior: 0x%x\n", behavior);
     fprintf(stderr, "  behavior->make_tags: 0x%x\n", behavior->make_tags);
