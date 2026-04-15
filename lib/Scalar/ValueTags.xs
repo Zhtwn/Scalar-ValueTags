@@ -115,15 +115,14 @@ void hv_inc_count(pTHX_ SV *shv, SV *tag)
 
     HV *hv = (HV *)shv;
 
-    IV count = 1;
-    SV *ret;
-    HE *entry = hv_fetch_ent(hv, tag, FALSE, 0);
-    if (entry) {
-        SV *val = hv_iterval(hv, entry);
-        count += SvIV(val);
+    HE *he = hv_fetch_ent(hv, tag, FALSE, 0);
+    if (he) {
+        SV *val = hv_iterval(hv, he);
+        SvIV_set(val, SvIV(val) + 1);
     }
-    ret = newSViv(count);
-    hv_store_ent(hv, tag, ret, 0);
+    else {
+        hv_store_ent(hv, tag, newSViv(1), 0);
+    }
 
     return;
 }
