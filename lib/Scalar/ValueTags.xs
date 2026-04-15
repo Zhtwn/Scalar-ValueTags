@@ -26,12 +26,6 @@
 #endif
 
 #ifdef HAVE_VALUE_MAGIC
-#  define ENTER_DISARM_INFECT \
-  ENTER;  \
-  SAVESPTR(PL_viralmagic_annotations); PL_viralmagic_annotations = NULL
-
-#define LEAVE_DISARM_INFECT  \
-  LEAVE
 
 /*** Structs ***/
 
@@ -210,7 +204,6 @@ static SV *make_hash_retval(pTHX_ MAGIC *mg)
 
 void infect_value_tags(pTHX_ SV *osv, MAGIC *omg, SV *nsv, MAGIC *nmg)
 {
-    ENTER_DISARM_INFECT;    // DOCME: why is this required here?
     assert(osv);
     assert(omg);
     assert(nsv);
@@ -227,7 +220,6 @@ void infect_value_tags(pTHX_ SV *osv, MAGIC *omg, SV *nsv, MAGIC *nmg)
         fprintf(stderr, "  dup_tags\n");
         SV *value_tags = vt_spec->behavior->dup_tags(aTHX_ VALUETAGS(omg));
         nmg = add_value_tags_magic(vt_type, nsv, value_tags);
-        LEAVE_DISARM_INFECT;
         fprintf(stderr, "<infect_value_tags\n");
         return;
     }
@@ -251,7 +243,6 @@ void infect_value_tags(pTHX_ SV *osv, MAGIC *omg, SV *nsv, MAGIC *nmg)
 //      }
 #endif
 
-    LEAVE_DISARM_INFECT;
     fprintf(stderr, "<infect_value_tags\n");
 }
 
