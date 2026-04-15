@@ -190,10 +190,8 @@ static SV *make_array_retval(pTHX_ MAGIC *mg)
 {
     assert(mg);
     fprintf(stderr, ">make_array_retval\n");
-//  fprintf(stderr, "  VALUETAGS\n");
     AV *av = (AV *)VALUETAGS(mg);
 
-//  fprintf(stderr, "  results: newAVav\n");
     AV *results = newAVav(av);
 
     fprintf(stderr, "<make_array_retval: 0x%x\n", (SV *)results);
@@ -241,11 +239,7 @@ void infect_value_tags(pTHX_ SV *osv, MAGIC *omg, SV *nsv, MAGIC *nmg)
     SV *tag;
     fprintf(stderr, "  iter_next: ovt: 0x%x\n", ovt);
     while (tag = vt_spec->behavior->iter_next(aTHX_ ovt, &ctx)) {
-        fprintf(stderr, "SvTYPE(tag): %d\n", SvTYPE(tag));
-        // FIXME FIXME FIXME - why is SvTYPE(tag) == SVt_NULL ????
-        fprintf(stderr, "FOOOOOO\n");
         SV *foo = newSVsv(tag);
-        fprintf(stderr, "  add_tag: nsv: 0x%x, tag: 0x%x\n", nsv, tag);
         vt_spec->behavior->add_tag(aTHX_ VALUETAGS(nmg), tag);
     }
     vt_spec->behavior->iter_end(aTHX_ ovt, &ctx);
@@ -380,15 +374,11 @@ static struct ValueTagsSpec *final_vt_spec = NULL;
 
 static struct ValueTagsSpec *S_get_vt_spec(pTHX_ SV *vt_type)
 {
-//  fprintf(stderr, ">S_get_vt_spec: vt_type: 0x%x\n", vt_type);
     for (struct ValueTagsSpec *cur = vt_specs; cur; cur = cur->next) {
-//      fprintf(stderr, "  next cur\n");
         if (cur && (cur->vt_type == vt_type)) {
-//          fprintf(stderr, "<S_get_vt_spec: 0x%x\n", cur);
             return cur;
         }
     }
-//  fprintf(stderr, "<S_get_vt_spec: 0x0\n");
 //  croak("vt_type not registered");
     return NULL;
 }
@@ -429,15 +419,13 @@ static void S_set_vt_type_behavior(pTHX_ SV *vt_type, SV *behavior_type)
 
 static MAGIC *S_get_value_tags_magic(pTHX_ SV *vt_type, SV *sv)
 {
-    assert(sv);
     assert(vt_type);
+    assert(sv);
     fprintf(stderr, ">S_get_value_tags_magic: sv: 0x%x\n", sv);
 
     MAGIC *mg = NULL;
     if (SvTYPE(sv) >=  SVt_PVMG) {
-//  fprintf(stderr, "  find magic\n");
         mg = sv_magicv2_find_by_auxsv(sv, vt_type);
-//      if (mg) fprintf(stderr, "  found magic\n"); else fprintf(stderr, "  no magic found\n");
     }
 
     if (mg) fprintf(stderr, "<S_get_value_tags_magic: return magic\n"); else fprintf(stderr, "<S_get_value_tags_magic: NO magic\n");
@@ -460,9 +448,7 @@ static MAGIC *S_add_value_tags_magic(pTHX_ SV *vt_type, SV *sv, SV *value_tags)
 
     fprintf(stderr, "<S_add_value_tags_magic\n");
 
-//  fprintf(stderr, "  get_vt_spec\n");
     struct ValueTagsSpec *vt_spec = get_vt_spec(vt_type);
-//  fprintf(stderr, "  vt_spec: 0x%x\n", vt_spec);
 
     // FIXME - detect and handle sv_magicv2_add failure?
     fprintf(stderr, "  sv_magicv2_add\n");
@@ -492,7 +478,6 @@ static MAGIC *S_init_value_tags_magic(pTHX_ SV *vt_type, SV *sv, SV *value_tags)
     assert(vt_type);
     fprintf(stderr, "<S_init_value_tags_magic\n");
 
-//  fprintf(stderr, "  get_value_tags_magic\n");
     MAGIC *mg = get_value_tags_magic(vt_type, sv);
 
     if (!mg) {
