@@ -82,7 +82,7 @@ my $vt_type;
     add_value_tag( $vt_type, \$var, $tag_two );
 
     is( get_value_tags( $vt_type, \$var ), [ $tag_one, $tag_two ],
-        'after second tag_rwo added, get_value_tags should return tag_one and tag_two' );
+        'after second tag_two added, get_value_tags should return tag_one and tag_two' );
 }
 
 done_testing;
