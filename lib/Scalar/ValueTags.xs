@@ -225,10 +225,9 @@ void infect_value_tags(pTHX_ SV *osv, MAGIC *omg, SV *nsv, MAGIC *nmg)
     nmg = get_value_tags_magic(vt_type, nsv);
 
     if (!nmg) {
-        // FIXME - dup_tags repeats value tags check done in get_value_tags_magic
         fprintf(stderr, "  dup_tags\n");
         SV *value_tags = vt_spec->behavior->dup_tags(aTHX_ VALUETAGS(omg));
-        nmg = init_value_tags_magic(vt_type, nsv, value_tags);
+        nmg = add_value_tags_magic(vt_type, nsv, value_tags);
         LEAVE_DISARM_INFECT;
         fprintf(stderr, "<infect_value_tags\n");
         return;
