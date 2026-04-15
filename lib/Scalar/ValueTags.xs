@@ -62,10 +62,8 @@ struct ValueTagsSpec {
 
 void av_append_uniq(pTHX_ SV *sav, SV *tag)
 {
-    assert(sav);
-    assert(tag);
-    assert(SvPOK(sav));
-    assert(SvTYPE(sav) == SVt_PVAV);
+    assert(SvOK(sav) && SvTYPE(sav) == SVt_PVAV);
+    assert(SvROK(tag));
     fprintf(stderr, ">av_append_uniq: 0x%x\n", tag);
 
     fprintf(stderr, "  casting to AV\n");
@@ -98,7 +96,7 @@ void av_append_uniq(pTHX_ SV *sav, SV *tag)
 
 void av_append(pTHX_ SV *sav, SV *tag)
 {
-    assert(sav);
+    assert(SvOK(sav) && SvTYPE(sav) == SVt_PVAV);
     assert(tag);
 
     SV *new_tag = newSVsv(tag);
@@ -108,10 +106,8 @@ void av_append(pTHX_ SV *sav, SV *tag)
 
 void hv_inc_count(pTHX_ SV *shv, SV *tag)
 {
-    assert(shv);
+    assert(SvOK(shv) && SvTYPE(shv) == SVt_PVHV);
     assert(tag);
-    assert(SvPOK(shv));
-    assert(SvTYPE(shv) == SVt_PVHV);
 
     HV *hv = (HV *)shv;
 
@@ -163,17 +159,20 @@ static SV *make_hash_value_tags(pTHX)
 
 static SV *dup_array_value_tags(pTHX_ SV *value_tags)
 {
+    assert(SvOK(value_tags) && SvTYPE(value_tags) == SVt_PVAV);
     return (SV *)newAVav((AV *)value_tags);
 }
 
 static SV *dup_hash_value_tags(pTHX_ SV *value_tags)
 {
+    assert(SvOK(value_tags) && SvTYPE(value_tags) == SVt_PVHV);
     return (SV *)newHVhv((HV *)value_tags);
 }
 
 static void free_value_tags(pTHX_ SV *sv, MAGIC *mg)
 {
-    assert(mg);
+    assert(sv);
+    assert(mg);     // FIXME - does magicv2 ever call this with NULL mg?
     fprintf(stderr, ">free_value_tags: sv: 0x%x\n", sv);
     fprintf(stderr, "  VALUETAGS\n");
     SV *vt = VALUETAGS(mg);
@@ -189,9 +188,10 @@ static SV *make_array_retval(pTHX_ MAGIC *mg)
 {
     assert(mg);
     fprintf(stderr, ">make_array_retval\n");
-    AV *av = (AV *)VALUETAGS(mg);
+    SV *vt = VALUETAGS(mg);
+    assert(SvOK(vt) && SvTYPE(vt) == SVt_PVAV);
 
-    AV *results = newAVav(av);
+    AV *results = newAVav((AV *)vt);
 
     fprintf(stderr, "<make_array_retval: 0x%x\n", (SV *)results);
     return (SV *)results;
@@ -201,7 +201,9 @@ static SV *make_hash_retval(pTHX_ MAGIC *mg)
 {
     assert(mg);
 
-    HV *results = newHVhv((HV *)VALUETAGS(mg));
+    SV *vt = VALUETAGS(mg);
+    assert(SvOK(vt) && SvTYPE(vt) == SVt_PVAV);
+    HV *results = newHVhv((HV *)vt);
 
     return (SV *)results;
 }
@@ -257,6 +259,8 @@ void infect_value_tags(pTHX_ SV *osv, MAGIC *omg, SV *nsv, MAGIC *nmg)
 
 static void iter_begin_array (pTHX_ SV *value_tags, void **ctx)
 {
+    assert(value_tags);
+    assert(ctx);
     fprintf(stderr, ">iter_begin_array: vt: 0x%x, *ctx: 0x%x\n", value_tags, *ctx);
     AV *av = (AV *)value_tags;
     SSize_t *idx;
@@ -268,6 +272,8 @@ static void iter_begin_array (pTHX_ SV *value_tags, void **ctx)
 
 static SV *iter_next_array (pTHX_ SV *value_tags, void **ctx)
 {
+    assert(value_tags);
+    assert(ctx);
     fprintf(stderr, ">iter_next_array: vt: 0x%x, *ctx: 0x%x\n", value_tags, *ctx);
     AV *av = (AV *)value_tags;
     SSize_t *idx = (SSize_t *)*ctx;
@@ -291,11 +297,15 @@ static SV *iter_next_array (pTHX_ SV *value_tags, void **ctx)
 
 static void iter_end_array (pTHX_ SV *value_tags, void **ctx)
 {
+    assert(value_tags);
+    assert(ctx);
     Safefree(*ctx);
 }
 
 static void iter_begin_hash (pTHX_ SV *value_tags, void **ctx)
 {
+    assert(value_tags);
+    assert(ctx);
     HV *hv = (HV *)value_tags;
 
     // save hash count in ctx, to avoid calling hv_iternext on empty hash (FIXME: is this necessary?)
@@ -307,6 +317,8 @@ static void iter_begin_hash (pTHX_ SV *value_tags, void **ctx)
 
 static SV *iter_next_hash (pTHX_ SV *value_tags, void **ctx)
 {
+    assert(value_tags);
+    assert(ctx);
     HV *hv = (HV *)value_tags;
     I32 *cnt = (I32 *)*ctx;
 
@@ -323,6 +335,8 @@ static SV *iter_next_hash (pTHX_ SV *value_tags, void **ctx)
 
 static void iter_end_hash (pTHX_ SV *value_tags, void **ctx)
 {
+    assert(value_tags);
+    assert(ctx);
     Safefree(*ctx);
 }
 
@@ -373,6 +387,7 @@ static struct ValueTagsSpec *final_vt_spec = NULL;
 
 static struct ValueTagsSpec *S_get_vt_spec(pTHX_ SV *vt_type)
 {
+    assert(vt_type);
     for (struct ValueTagsSpec *cur = vt_specs; cur; cur = cur->next) {
         if (cur && (cur->vt_type == vt_type)) {
             return cur;
@@ -385,7 +400,9 @@ static struct ValueTagsSpec *S_get_vt_spec(pTHX_ SV *vt_type)
 #define set_vt_type_behavior(vt_type, behavior_type) S_set_vt_type_behavior(aTHX_ vt_type, behavior_type)
 static void S_set_vt_type_behavior(pTHX_ SV *vt_type, SV *behavior_type)
 {
-    // FIXME - validate parameters
+    assert(vt_type);
+    assert(behavior_type);
+
     fprintf(stderr, ">S_set_vt_type_behavor\n");
     fprintf(stderr, "  behavior_type: %d\n", SvIV(behavior_type));
     const struct ValueTagsBehavior *behavior = &behaviors[SvIV(behavior_type)];
@@ -440,8 +457,8 @@ static const struct ScalarValueMagicFunctions magic_funcs = {
 
 static MAGIC *S_add_value_tags_magic(pTHX_ SV *vt_type, SV *sv, SV *value_tags)
 {
-    assert(sv);
     assert(vt_type);
+    assert(sv);
     assert(!get_value_tags_magic(vt_type, sv));
 
     fprintf(stderr, "<S_add_value_tags_magic\n");
@@ -472,8 +489,8 @@ static MAGIC *S_add_value_tags_magic(pTHX_ SV *vt_type, SV *sv, SV *value_tags)
 
 static MAGIC *S_init_value_tags_magic(pTHX_ SV *vt_type, SV *sv, SV *value_tags)
 {
-    assert(sv);
     assert(vt_type);
+    assert(sv);
     fprintf(stderr, "<S_init_value_tags_magic\n");
 
     MAGIC *mg = get_value_tags_magic(vt_type, sv);
@@ -488,8 +505,8 @@ static MAGIC *S_init_value_tags_magic(pTHX_ SV *vt_type, SV *sv, SV *value_tags)
 
 static MAGIC *S_remove_value_tags_magic(pTHX_ SV *vt_type, SV *sv)
 {
-    assert(sv);
     assert(vt_type);
+    assert(sv);
     fprintf(stderr, ">S_remove_value_tags_magic\n");
 
     fprintf(stderr, "  get_value_tags_magic\n");
@@ -571,6 +588,8 @@ void
 add_value_tag (SV *vt_type_ref, SV *sv_ref, SV *tag)
   CODE:
 #ifdef HAVE_VALUE_MAGIC
+    if (!SvROK(vt_type_ref) || SvTYPE(SvRV(vt_type_ref)) > SVt_PVMG)
+        croak("Expected a SCALAR reference for vt_type");   // FIXME - need better validation
     if (!SvROK(sv_ref) || SvTYPE(SvRV(sv_ref)) > SVt_PVMG)
         croak("Expected a SCALAR reference for target variable");
     fprintf(stderr, ">add_value_tag: sv: 0x%x, tag: 0x%x\n", SvRV(sv_ref), tag);
@@ -595,6 +614,8 @@ SV *
 get_value_tags (SV *vt_type_ref, SV *sv_ref)
   CODE:
 #ifdef HAVE_VALUE_MAGIC
+    if (!SvROK(vt_type_ref) || SvTYPE(SvRV(vt_type_ref)) > SVt_PVMG)
+        croak("Expected a SCALAR reference for vt_type");   // FIXME - need better validation
     if (!SvROK(sv_ref) || SvTYPE(SvRV(sv_ref)) > SVt_PVMG)
         croak("Expected a SCALAR reference for target variable");
 
@@ -632,6 +653,8 @@ void
 clear_value_tags (SV *vt_type_ref, SV *sv_ref)
   CODE:
 #ifdef HAVE_VALUE_MAGIC
+    if (!SvROK(vt_type_ref) || SvTYPE(SvRV(vt_type_ref)) > SVt_PVMG)
+        croak("Expected a SCALAR reference for vt_type");   // FIXME - need better validation
     if (!SvROK(sv_ref) || SvTYPE(SvRV(sv_ref)) > SVt_PVMG)
         croak("Expected a SCALAR reference for target variable");
 
