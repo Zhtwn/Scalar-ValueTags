@@ -210,7 +210,7 @@ static SV *make_hash_retval(pTHX_ MAGIC *mg)
 
 void infect_value_tags(pTHX_ SV *osv, MAGIC *omg, SV *nsv, MAGIC *nmg)
 {
-    ENTER_DISARM_INFECT;
+    ENTER_DISARM_INFECT;    // DOCME: why is this required here?
     assert(osv);
     assert(omg);
     assert(nsv);
