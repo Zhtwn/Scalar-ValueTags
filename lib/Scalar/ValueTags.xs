@@ -188,16 +188,17 @@ void infect_value_tags(pTHX_ SV *osv, MAGIC *omg, SV *nsv, MAGIC *nmg)
     SV *vt_type = MgAUXSV(omg);
     struct ValueTagsSpec *vt_spec = get_vt_spec(vt_type);
 
+    SV *ovt = VALUETAGS(omg);
+
     // nmg is never set, since MGv2f_SCALARVALUE_INFECTIOUS is not set
     nmg = get_value_tags_magic(vt_type, nsv);
 
     if (!nmg) {
-        SV *value_tags = vt_spec->behavior->dup_tags(aTHX_ VALUETAGS(omg));
+        SV *value_tags = vt_spec->behavior->dup_tags(aTHX_ ovt);
         nmg = add_value_tags_magic(vt_type, nsv, value_tags);
         return;
     }
 
-    SV *ovt = VALUETAGS(omg);
     void *ctx;
     vt_spec->behavior->iter_begin(aTHX_ ovt, &ctx);
     SV *tag;
