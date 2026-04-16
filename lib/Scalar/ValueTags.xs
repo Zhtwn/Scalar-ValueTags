@@ -137,13 +137,11 @@ static SV *make_hash_value_tags(pTHX)
 
 static SV *dup_array_value_tags(pTHX_ SV *value_tags)
 {
-    assert(SvOK(value_tags) && SvTYPE(value_tags) == SVt_PVAV);
     return (SV *)newAVav((AV *)value_tags);
 }
 
 static SV *dup_hash_value_tags(pTHX_ SV *value_tags)
 {
-    assert(SvOK(value_tags) && SvTYPE(value_tags) == SVt_PVHV);
     return (SV *)newHVhv((HV *)value_tags);
 }
 
