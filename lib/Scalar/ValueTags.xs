@@ -251,26 +251,15 @@ static void iter_begin_hash (pTHX_ SV *value_tags, void **ctx)
 {
     assert(value_tags);
     assert(ctx);
-    HV *hv = (HV *)value_tags;
-
-    // save hash count in ctx, to avoid calling hv_iternext on empty hash (FIXME: is this necessary?)
-    I32 *cnt;
-    Newx(cnt, 1, I32);
-    *cnt = hv_iterinit(hv);
-    *ctx = (void *)cnt;
+    (void) hv_iterinit((HV *)value_tags);
 };
 
 static SV *iter_next_hash (pTHX_ SV *value_tags, void **ctx)
 {
     assert(value_tags);
     assert(ctx);
-    HV *hv = (HV *)value_tags;
-    I32 *cnt = (I32 *)*ctx;
 
-    if (!*cnt)
-        return NULL;
-
-    HE *he = hv_iternext(hv);
+    HE *he = hv_iternext((HV *)value_tags);
 
     if (!he)
         return NULL;
@@ -282,7 +271,6 @@ static void iter_end_hash (pTHX_ SV *value_tags, void **ctx)
 {
     assert(value_tags);
     assert(ctx);
-    Safefree(*ctx);
 }
 
 enum behavior_types {
