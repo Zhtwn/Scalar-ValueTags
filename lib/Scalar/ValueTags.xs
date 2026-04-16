@@ -63,7 +63,7 @@ void av_append_uniq(pTHX_ SV *sav, SV *tag)
 
     SV **svp = AvARRAY(av);
     Size_t count = av_count(av);
-    for(U32 idx = 0; idx < av_count(av); idx++) {
+    for(U32 idx = 0; idx < count; idx++) {
         // Skip duplicates
         if(SvROK(svp[idx]) && SvRV(tag) == SvRV(svp[idx])) {
             return;
