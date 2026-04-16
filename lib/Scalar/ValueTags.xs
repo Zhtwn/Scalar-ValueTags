@@ -170,7 +170,7 @@ static SV *make_hash_retval(pTHX_ MAGIC *mg)
     assert(mg);
 
     SV *vt = VALUETAGS(mg);
-    assert(SvOK(vt) && SvTYPE(vt) == SVt_PVAV);
+    assert(SvOK(vt) && SvTYPE(vt) == SVt_PVHV);
     HV *results = newHVhv((HV *)vt);
 
     return (SV *)results;
