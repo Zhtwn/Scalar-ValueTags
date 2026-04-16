@@ -148,7 +148,7 @@ static SV *dup_hash_value_tags(pTHX_ SV *value_tags)
 static void free_value_tags(pTHX_ SV *sv, MAGIC *mg)
 {
     assert(sv);
-    assert(mg);     // FIXME - does magicv2 ever call this with NULL mg?
+    assert(mg);     // Just In Case
     SV *vt = VALUETAGS(mg);
     if (vt) {
         SvREFCNT_dec(vt);
