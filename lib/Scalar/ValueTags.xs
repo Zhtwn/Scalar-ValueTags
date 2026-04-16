@@ -95,7 +95,7 @@ void hv_inc_count(pTHX_ SV *shv, SV *tag)
 
     HE *he = hv_fetch_ent(hv, tag, FALSE, 0);
     if (he) {
-        SV *val = hv_iterval(hv, he);
+        SV *val = HeVAL(he);
         SvIV_set(val, SvIV(val) + 1);
     }
     else {
@@ -281,7 +281,7 @@ static SV *iter_next_hash (pTHX_ SV *value_tags, void **ctx)
     if (!he)
         return NULL;
 
-    return hv_iterval(hv, he);
+    return HeVAL(he);
 }
 
 static void iter_end_hash (pTHX_ SV *value_tags, void **ctx)
