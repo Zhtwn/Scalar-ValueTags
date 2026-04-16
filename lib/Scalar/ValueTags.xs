@@ -203,7 +203,7 @@ void infect_value_tags(pTHX_ SV *osv, MAGIC *omg, SV *nsv, MAGIC *nmg)
     void *ctx;
     vt_spec->behavior->iter_begin(aTHX_ ovt, &ctx);
     SV *tag;
-    while (tag = vt_spec->behavior->iter_next(aTHX_ ovt, &ctx)) {
+    while ((tag = vt_spec->behavior->iter_next(aTHX_ ovt, &ctx))) {
         SV *foo = newSVsv(tag);
         vt_spec->behavior->add_tag(aTHX_ VALUETAGS(nmg), tag);
     }
