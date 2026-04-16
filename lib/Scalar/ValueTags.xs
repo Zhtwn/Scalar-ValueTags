@@ -382,7 +382,7 @@ static MAGIC *S_add_value_tags_magic(pTHX_ SV *vt_type, SV *sv, SV *value_tags)
     // FIXME - detect and handle sv_magicv2_add failure?
     MAGIC *mg = sv_magicv2_add(sv, (struct MagicFunctions *)&magic_funcs, 0, vt_type);
 
-    // SvAUX refcnt is automatically decremented on mg destroy, so inc here
+    // MgAUXSV refcnt is automatically decremented on mg destroy, so inc here
     SvREFCNT_inc(vt_type);
 
     if (!value_tags) {
