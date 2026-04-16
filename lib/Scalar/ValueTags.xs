@@ -303,6 +303,7 @@ static const struct ValueTagsBehavior behaviors[] = {
 
 /*** VALUE-TAGS SPECIFICATIONS ***/
 
+// FIXME - must make these thread-safe (is MY_CXT the correct pattern?)
 static struct ValueTagsSpec *vt_specs = NULL;
 static struct ValueTagsSpec *final_vt_spec = NULL;
 
