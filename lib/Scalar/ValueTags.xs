@@ -221,10 +221,7 @@ static void iter_begin_array (pTHX_ SV *value_tags, void **ctx)
 {
     assert(value_tags);
     assert(ctx);
-    SSize_t *idx;
-    Newx(idx, 1, SSize_t); // or Newxz?
-    *idx = 0;
-    *ctx = (void *)idx;
+    *(intptr_t *)ctx = 0;
 }
 
 static SV *iter_next_array (pTHX_ SV *value_tags, void **ctx)
@@ -232,15 +229,15 @@ static SV *iter_next_array (pTHX_ SV *value_tags, void **ctx)
     assert(value_tags);
     assert(ctx);
     AV *av = (AV *)value_tags;
-    SSize_t *idx = (SSize_t *)*ctx;
-    if (*idx >= av_count(av)) {
+    intptr_t *idxp = (intptr_t *)ctx;
+    if (*idxp >= av_count(av)) {
         return NULL;
     }
-    SV **tag_ref = av_fetch(av, *idx, 0);
+    SV **tag_ref = av_fetch(av, *idxp, 0);
     if (!tag_ref)
         croak("iter_next_array: av_fetch returned null");
     SV *tag = *tag_ref;
-    (*idx)++;
+    (*idxp)++;
     return tag;
 }
 
@@ -248,7 +245,6 @@ static void iter_end_array (pTHX_ SV *value_tags, void **ctx)
 {
     assert(value_tags);
     assert(ctx);
-    Safefree(*ctx);
 }
 
 static void iter_begin_hash (pTHX_ SV *value_tags, void **ctx)
