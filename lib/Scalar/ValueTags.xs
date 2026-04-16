@@ -243,12 +243,6 @@ static SV *iter_next_array (pTHX_ SV *value_tags, void **ctx)
     return tag;
 }
 
-static void iter_end_array (pTHX_ SV *value_tags, void **ctx)
-{
-    assert(value_tags);
-    assert(ctx);
-}
-
 static void iter_begin_hash (pTHX_ SV *value_tags, void **ctx)
 {
     assert(value_tags);
@@ -269,12 +263,6 @@ static SV *iter_next_hash (pTHX_ SV *value_tags, void **ctx)
     return HeVAL(he);
 }
 
-static void iter_end_hash (pTHX_ SV *value_tags, void **ctx)
-{
-    assert(value_tags);
-    assert(ctx);
-}
-
 enum behavior_types {
     BEHAVIOR_UNIQUE_REF_ARRAY,
     BEHAVIOR_APPEND_ARRAY,
@@ -291,7 +279,7 @@ static const struct ValueTagsBehavior behaviors[] = {
         .add_tag     = &av_append_uniq,
         .iter_begin  = &iter_begin_array,
         .iter_next   = &iter_next_array,
-        .iter_end    = &iter_end_array,
+        .iter_end    = NULL,
     },
     [BEHAVIOR_APPEND_ARRAY] = {
         .make_tags   = &make_array_value_tags,
@@ -301,7 +289,7 @@ static const struct ValueTagsBehavior behaviors[] = {
         .add_tag     = &av_append,
         .iter_begin  = &iter_begin_array,
         .iter_next   = &iter_next_array,
-        .iter_end    = &iter_end_array,
+        .iter_end    = NULL,
     },
     [BEHAVIOR_HASH_COUNT] = {
         .make_tags   = &make_hash_value_tags,
@@ -311,7 +299,7 @@ static const struct ValueTagsBehavior behaviors[] = {
         .add_tag     = &hv_inc_count,
         .iter_begin  = &iter_begin_hash,
         .iter_next   = &iter_next_hash,
-        .iter_end    = &iter_end_hash,
+        .iter_end    = NULL,
     },
 };
 
