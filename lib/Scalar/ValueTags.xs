@@ -205,7 +205,9 @@ void infect_value_tags(pTHX_ SV *osv, MAGIC *omg, SV *nsv, MAGIC *nmg)
     while ((tag = vt_spec->behavior->iter_next(aTHX_ ovt, &ctx))) {
         vt_spec->behavior->add_tag(aTHX_ VALUETAGS(nmg), tag);
     }
-    vt_spec->behavior->iter_end(aTHX_ ovt, &ctx);
+    if (vt_spec->behavior->iter_end) {
+        vt_spec->behavior->iter_end(aTHX_ ovt, &ctx);
+    }
 
 #ifdef DEBUG_TRACE_ANNOTATIONS
         // FIXME: handle adding trace magic somewhere
