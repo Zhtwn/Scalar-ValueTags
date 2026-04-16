@@ -125,14 +125,12 @@ static struct ValueTagsSpec *S_get_vt_spec(pTHX_ SV *vt_type);
 
 static SV *make_array_value_tags(pTHX)
 {
-    AV *av = newAV();
-    return (SV *)av;
+    return (SV *)newAV();
 }
 
 static SV *make_hash_value_tags(pTHX)
 {
-    HV *hv = newHV();
-    return (SV *)hv;
+    return (SV *)newHV();
 }
 
 static SV *dup_array_value_tags(pTHX_ SV *value_tags)
