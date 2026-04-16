@@ -221,7 +221,6 @@ static void iter_begin_array (pTHX_ SV *value_tags, void **ctx)
 {
     assert(value_tags);
     assert(ctx);
-    AV *av = (AV *)value_tags;
     SSize_t *idx;
     Newx(idx, 1, SSize_t); // or Newxz?
     *idx = 0;
