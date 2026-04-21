@@ -281,7 +281,7 @@ static SV *make_array_retval(pTHX_ MAGIC *mg)
 
     AV *results = newAVav((AV *)vt);
 
-    return (SV *)results;
+    return newRV((SV *)results);
 }
 
 static SV *make_hash_retval(pTHX_ MAGIC *mg)
@@ -292,7 +292,7 @@ static SV *make_hash_retval(pTHX_ MAGIC *mg)
     assert(SvOK(vt) && SvTYPE(vt) == SVt_PVHV);
     HV *results = newHVhv((HV *)vt);
 
-    return (SV *)results;
+    return newRV((SV *)results);
 }
 
 void infect_value_tags(pTHX_ SV *osv, MAGIC *omg, SV *nsv, MAGIC *nmg)
@@ -657,8 +657,7 @@ get_value_tags (SV *vt_type_ref, SV *sv_ref)
     struct ValueTagsSpec *vt_spec = get_vt_spec(vt_type);
 
     if (mg) {
-        RETVAL = newRV(vt_spec->behavior->make_retval(aTHX_ mg));
-//      RETVAL = vt_spec->behavior->make_retval(aTHX_ mg);
+        RETVAL = vt_spec->behavior->make_retval(aTHX_ mg);
     }
     else {
         RETVAL = NULL;
