@@ -303,14 +303,22 @@ static const struct ValueTagsBehavior behaviors[] = {
 
 /*** VALUE-TAGS SPECIFICATIONS ***/
 
+#define MY_CXT_KEY "Scalar::ValueTags::_registry" XS_VERSION
+
+typedef struct {
+    struct ValueTagsSpec *vt_specs;
+    struct ValueTagsSpec *final_vt_spec;
+} my_cxt_t;
+
+START_MY_CXT
+
 // FIXME - must make these thread-safe (is MY_CXT the correct pattern?)
-static struct ValueTagsSpec *vt_specs = NULL;
-static struct ValueTagsSpec *final_vt_spec = NULL;
 
 static struct ValueTagsSpec *S_get_vt_spec(pTHX_ SV *vt_type)
 {
+    dMY_CXT;
     assert(vt_type);
-    for (struct ValueTagsSpec *cur = vt_specs; cur; cur = cur->next) {
+    for (struct ValueTagsSpec *cur = MY_CXT.vt_specs; cur; cur = cur->next) {
         if (cur && (cur->vt_type == vt_type)) {
             return cur;
         }
@@ -322,6 +330,7 @@ static struct ValueTagsSpec *S_get_vt_spec(pTHX_ SV *vt_type)
 #define set_vt_type_behavior(vt_type, behavior_type) S_set_vt_type_behavior(aTHX_ vt_type, behavior_type)
 static void S_set_vt_type_behavior(pTHX_ SV *vt_type, SV *behavior_type)
 {
+    dMY_CXT;
     assert(vt_type);
     assert(behavior_type);
 
@@ -335,15 +344,14 @@ static void S_set_vt_type_behavior(pTHX_ SV *vt_type, SV *behavior_type)
         .behavior = behavior,
     };
 
-    if (vt_specs) {
-        final_vt_spec->next = new_vt_spec;
-        final_vt_spec = new_vt_spec;
+    if (MY_CXT.vt_specs) {
+        MY_CXT.final_vt_spec->next = new_vt_spec;
+        MY_CXT.final_vt_spec = new_vt_spec;
     }
     else {
-        vt_specs      = new_vt_spec;
-        final_vt_spec = new_vt_spec;
+        MY_CXT.vt_specs      = new_vt_spec;
+        MY_CXT.final_vt_spec = new_vt_spec;
     }
-
 }
 
 /*** MAGIC ***/
@@ -374,7 +382,6 @@ static MAGIC *S_add_value_tags_magic(pTHX_ SV *vt_type, SV *sv, SV *value_tags)
     assert(vt_type);
     assert(sv);
     assert(!get_value_tags_magic(vt_type, sv));
-
 
     struct ValueTagsSpec *vt_spec = get_vt_spec(vt_type);
 
@@ -547,3 +554,14 @@ clear_value_tags (SV *vt_type_ref, SV *sv_ref)
     }
 #endif
 
+void
+CLONE(...)
+  CODE:
+    MY_CXT_CLONE;
+
+BOOT:
+{
+    MY_CXT_INIT;
+    MY_CXT.vt_specs = NULL;
+    MY_CXT.final_vt_spec = NULL;
+}
