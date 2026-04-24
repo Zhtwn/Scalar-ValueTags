@@ -18,7 +18,7 @@ my $vt_type;
     my $tag = { tag => 'one' };
     add_value_tag( $vt_type, \$var_one, $tag );
 
-    is( get_value_tags( $vt_type, \$var_one ), [$tag],
+    is( get_value_tags( $vt_type, \$var_one ), [exact_ref($tag)],
         'get_value_tags should return tags from tagged variable' );
 
     my $var_two = 456;
@@ -28,11 +28,11 @@ my $vt_type;
 
     my $in_order = $var_one + $var_two;
 
-    is( get_value_tags( $vt_type, \$in_order ), [$tag],
+    is( get_value_tags( $vt_type, \$in_order ), [exact_ref($tag)],
         'get_value_tags should return initial tag when tag is on first variable' );
 
     my $out_of_order = $var_two + $var_one;
-    is( get_value_tags( $vt_type, \$out_of_order ), [$tag],
+    is( get_value_tags( $vt_type, \$out_of_order ), [exact_ref($tag)],
         'get_value_tags should return initial tag when tag is on second variable' );
 }
 
@@ -42,20 +42,20 @@ my $vt_type;
     my $tag_one = { tag => 'one' };
     add_value_tag( $vt_type, \$var_one, $tag_one );
 
-    is( get_value_tags( $vt_type, \$var_one ), [$tag_one],
+    is( get_value_tags( $vt_type, \$var_one ), [exact_ref($tag_one)],
         'get_value_tags on first variable should be correct' );
 
     my $var_two = 456;
     my $tag_two = { tag => 'two' };
     add_value_tag( $vt_type, \$var_two, $tag_two );
 
-    is( get_value_tags( $vt_type, \$var_two ), [$tag_two],
+    is( get_value_tags( $vt_type, \$var_two ), [exact_ref($tag_two)],
         'get_value_tags on second variable should be correct' );
 
     my $combined = $var_one + $var_two;
 
     # FIXME: is tag order deterministic in implementation?
-    is( get_value_tags( $vt_type, \$combined ), [ $tag_one, $tag_two ],
+    is( get_value_tags( $vt_type, \$combined ), [ exact_ref($tag_one), exact_ref($tag_two) ],
         'get_value_tags should return both tags' );
 }
 
@@ -67,23 +67,23 @@ my $vt_type;
     my $var = 123;
     add_value_tag( $vt_type, \$var, $tag_one );
 
-    is( get_value_tags( $vt_type, \$var ), [ $tag_one ],
+    is( get_value_tags( $vt_type, \$var ), [ exact_ref($tag_one) ],
         'after first tag_one added, get_value_tags should return tag_one' );
 
     add_value_tag( $vt_type, \$var, $tag_one );
 
-    is( get_value_tags( $vt_type, \$var ), [ $tag_one ],
+    is( get_value_tags( $vt_type, \$var ), [ exact_ref($tag_one) ],
         'after second tag_one added, get_value_tags should return only tag_one' );
 
     add_value_tag( $vt_type, \$var, $tag_two );
 
     # FIXME: is tag order deterministic in implementation?
-    is( get_value_tags( $vt_type, \$var ), [ $tag_one, $tag_two ],
+    is( get_value_tags( $vt_type, \$var ), [ exact_ref($tag_one), exact_ref($tag_two) ],
         'after first tag_two added, get_value_tags should return tag_one and tag_two' );
 
     add_value_tag( $vt_type, \$var, $tag_two );
 
-    is( get_value_tags( $vt_type, \$var ), [ $tag_one, $tag_two ],
+    is( get_value_tags( $vt_type, \$var ), [ exact_ref($tag_one), exact_ref($tag_two) ],
         'after second tag_two added, get_value_tags should return tag_one and tag_two' );
 }
 
