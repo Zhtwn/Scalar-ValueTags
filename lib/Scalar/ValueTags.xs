@@ -44,10 +44,8 @@ struct ValueTagsBehavior {
     SV*  (*dup_tags)(pTHX_ SV *value_tags);
     void (*free_tags)(pTHX_ SV *sv, MAGIC *mg);   // FIXME: needed?
     void (*add_tag)(pTHX_ SV *sv, SV *tag);
+    void (*combine_tags)(pTHX_ SV *sv, SV *tag);
     SV*  (*make_retval)(pTHX_ MAGIC *mg);
-    void (*iter_begin)(pTHX_ SV *value_tags, void **iter_cxt);
-    SV*  (*iter_next)(pTHX_ SV *value_tags, void **iter_cxt);
-    void (*iter_end)(pTHX_ SV *value_tags, void **iter_cxt);
 };
 
 struct ValueTagsSpec {
@@ -64,164 +62,129 @@ struct ValueTagsSpec {
 
 /*** UTILTIIES ***/
 
-void av_append_uniq(pTHX_ SV *sav, SV *tag)
+void av_append_tag(pTHX_ SV *sav, SV *tag, Size_t check_uniq)
 {
     assert(VALID_AV_TAGS(sav));
     assert(SvROK(tag));
+    fprintf(stderr, "NCM DEBUG: av_append_tag '%s'\n", SvPV_nolen(tag));
 
     AV *av = (AV *)sav;
 
-    SV **svp = AvARRAY(av);
-    Size_t count = av_count(av);
-    for(U32 idx = 0; idx < count; idx++) {
-        // Skip duplicates
-        if(SvROK(svp[idx]) && SvRV(tag) == SvRV(svp[idx])) {
-            return;
+    if (check_uniq) {
+        SV **svp = AvARRAY(av);
+        Size_t count = av_count(av);
+        for(U32 idx = 0; idx < count; idx++) {
+            // Skip duplicates
+            if(SvROK(svp[idx]) && SvRV(tag) == SvRV(svp[idx])) {
+                return;
+            }
         }
     }
 
     SV *ret = newSVsv(tag);
     av_push_simple(av, ret);
-
-    return;
 }
 
-void av_append(pTHX_ SV *sav, SV *tag)
+void add_tag_unique_ref_array (pTHX_ SV *tags, SV *tag)
 {
-    assert(VALID_AV_TAGS(sav));
-    assert(tag);
+    assert(VALID_AV_TAGS(tags));
+    assert(SvROK(tag));
 
-    SV *new_tag = newSVsv(tag);
-    av_push_simple((AV *)sav, new_tag);
-    return;
+    // always check_uniq
+    av_append_tag(aTHX_ tags, tag, 1);
 }
 
-void hv_inc_count(pTHX_ SV *shv, SV *tag)
+void combine_tags_unique_ref_array (pTHX_ SV *src_tags, SV *dst_tags)
 {
-    // FIXME - figure out why DISARM_INFECT is needed here:
-    //  (without it, hv_store_ent causes a recursive call to infect_value_tags,
-    //  apparently on the temporary SV used to store the sum of the two vars)
-    /*
-     *
-TEST: combine var_two and var_one
-NCM DEBUG: >infect_value_tags: osv: 0xda800360, nsv: 0xda9224b8
-NCM DEBUG: <infect_value_tags: dup_tags
-NCM DEBUG: >infect_value_tags: osv: 0xda9224b8, nsv: 0xda894100
-NCM DEBUG: <infect_value_tags: dup_tags
-NCM DEBUG: >infect_value_tags: osv: 0xda894100, nsv: 0xda9224b8
-NCM DEBUG:   iter_begin
-NCM DEBUG:     =iter_begin_hash
-NCM DEBUG:     iter_next: 0
-NCM DEBUG:     >iter_next_hash
-NCM DEBUG:     he: 0xd9e63d80
-NCM DEBUG:     add_tag: 0xda6f2fa8
-NCM DEBUG:     >hv_inc_count: shv: 0xd9e5e3d0
-NCM DEBUG:       hv_fetch_ent
-NCM DEBUG:       hv_store_ent (no he)
-NCM DEBUG: >infect_value_tags: osv: 0xda9224b8, nsv: 0xd9e6c348
-NCM DEBUG: <infect_value_tags: dup_tags
-NCM DEBUG:       hv_store_ent RETURN
-NCM DEBUG:     <hv_inc_count:
-NCM DEBUG:     iter_next: 1
-NCM DEBUG:     >iter_next_hash
-NCM DEBUG:     he: 0x0
-NCM DEBUG:     <iter_next_hash: NULL
-NCM DEBUG: <infect_value_tags
-NCM DEBUG: >infect_value_tags: osv: 0xda894100, nsv: 0xda88a958
-NCM DEBUG: <infect_value_tags: dup_tags
+    assert(VALID_AV_TAGS(src_tags));
+    assert(VALID_AV_TAGS(dst_tags));
 
-     */
-    /*
-TEST: combine var_one and var_two
-NCM DEBUG: >infect_value_tags: osv: 0xda894190, nsv: 0xda9224b8
-NCM DEBUG: <infect_value_tags: dup_tags
-NCM DEBUG: >infect_value_tags: osv: 0xda8942e0, nsv: 0xda9224b8
-NCM DEBUG:   iter_begin
-NCM DEBUG:     =iter_begin_hash
-NCM DEBUG:     iter_next: 0
-NCM DEBUG:     >iter_next_hash
-NCM DEBUG:     he: 0xda6e1e80
-NCM DEBUG:     add_tag: 0xda832c90
-NCM DEBUG:     >hv_inc_count: shv: 0xd9e5e3d0
-NCM DEBUG:       hv_fetch_ent
-NCM DEBUG:       hv_store_ent (no he)
-NCM DEBUG: >infect_value_tags: osv: 0xda9224b8, nsv: 0xda8e0480
-NCM DEBUG: <infect_value_tags: dup_tags
-NCM DEBUG:       hv_store_ent RETURN
-NCM DEBUG:     <hv_inc_count:
-NCM DEBUG:     iter_next: 1
-NCM DEBUG:     >iter_next_hash
-NCM DEBUG:     he: 0x0
-NCM DEBUG:     <iter_next_hash: NULL
-NCM DEBUG: <infect_value_tags
-NCM DEBUG: >infect_value_tags: osv: 0xda9224b8, nsv: 0xda894448
-NCM DEBUG: >infect_value_tags: osv: 0xda8e0480, nsv: 0xda9224b8
-NCM DEBUG:   iter_begin
-NCM DEBUG:     =iter_begin_hash
-NCM DEBUG:     iter_next: 0
-NCM DEBUG:     >iter_next_hash
-NCM DEBUG:     he: 0xda88bcb8
-NCM DEBUG:     add_tag: 0xda8e02b8
-NCM DEBUG:     >hv_inc_count: shv: 0xd9e5e3d0
-NCM DEBUG:       hv_fetch_ent
-NCM DEBUG:          he: 0xda88c5a0
-NCM DEBUG: >infect_value_tags: osv: 0xda8e0480, nsv: 0xda9224b8
-NCM DEBUG:   iter_begin
-NCM DEBUG:     =iter_begin_hash
-NCM DEBUG:     iter_next: 0
-NCM DEBUG:     >iter_next_hash
-NCM DEBUG:     he: 0xda88bcb8
-NCM DEBUG:     add_tag: 0xda8e02b8
-NCM DEBUG:     >hv_inc_count: shv: 0xd9e5e3d0
-NCM DEBUG:       hv_fetch_ent
-NCM DEBUG:          he: 0xda88c5a0
-NCM DEBUG: >infect_value_tags: osv: 0xda8e0480, nsv: 0xda9224b8
-NCM DEBUG:   iter_begin
-NCM DEBUG:     =iter_begin_hash
-NCM DEBUG:     iter_next: 0
-NCM DEBUG:     >iter_next_hash
-NCM DEBUG:     he: 0xda88bcb8
-NCM DEBUG:     add_tag: 0xda8e02b8
-NCM DEBUG:     >hv_inc_count: shv: 0xd9e5e3d0
-NCM DEBUG:       hv_fetch_ent
-NCM DEBUG:          he: 0xda88c5a0
-NCM DEBUG: >infect_value_tags: osv: 0xda8e0480, nsv: 0xda9224b8
-NCM DEBUG:   iter_begin
-NCM DEBUG:     =iter_begin_hash
-NCM DEBUG:     iter_next: 0
-NCM DEBUG:     >iter_next_hash
-NCM DEBUG:     he: 0xda88bcb8
-NCM DEBUG:     add_tag: 0xda8e02b8
-NCM DEBUG:     >hv_inc_count: shv: 0xd9e5e3d0
-NCM DEBUG:       hv_fetch_ent
-NCM DEBUG:          he: 0xda88c5a0
+    // no need to check uniqueness if destination has no tags
+    Size_t check_uniq = av_count((AV *)dst_tags);
 
-     */
-    ENTER_DISARM_INFECT;
-fprintf(stderr, "NCM DEBUG:     >hv_inc_count: shv: 0x%x\n", shv);
-    assert(VALID_HV_TAGS(shv));
+    AV *src_av = (AV *)src_tags;
+    SV **svp = AvARRAY(src_av);
+    Size_t count = av_count(src_av);
+    for (U32 idx = 0; idx < count; idx++) {
+        av_append_tag(aTHX_ dst_tags, svp[idx], check_uniq);
+    }
+}
+
+void add_tag_append_array (pTHX_ SV *tags, SV *tag)
+{
+    assert(VALID_AV_TAGS(tags));
+    assert(SvROK(tag));
+
+    // never check_uniq
+    av_append_tag(aTHX_ tags, tag, 0);
+}
+
+void combine_tags_append_array (pTHX_ SV *src_tags, SV *dst_tags)
+{
+    assert(VALID_AV_TAGS(src_tags));
+    assert(VALID_AV_TAGS(dst_tags));
+
+    AV *oav = (AV *)src_tags;
+    SV **svp = AvARRAY(oav);
+    Size_t count = av_count(oav);
+    for (U32 idx = 0; idx < count; idx++) {
+        // never check_uniq; always append
+        av_append_tag(aTHX_ dst_tags, svp[idx], 0);
+    }
+}
+
+void hv_inc_count (pTHX_ SV *tags, SV *tag, Size_t count)
+{
+    assert(VALID_HV_TAGS(tags));
     assert(tag);
 
-    HV *hv = (HV *)shv;
-
-fprintf(stderr, "NCM DEBUG:       hv_fetch_ent\n");
+    fprintf(stderr, "NCM DEBUG: >hv_inc_count: '%s': %d\n", SvPV_nolen(tag), count);
+    HV *hv = (HV *)tags;
     HE *he = hv_fetch_ent(hv, tag, FALSE, 0);
+
+    ENTER_DISARM_INFECT;    // avoid recursive infection
     if (he) {
-fprintf(stderr, "NCM DEBUG:          he: 0x%x\n", he);
         SV *val = HeVAL(he);
-fprintf(stderr, "NCM DEBUG:          val: %d\n", SvIV(val));
-fprintf(stderr, "NCM DEBUG:          SvIV_set: %d\n", SvIV(val) + 1);
-        SvIV_set(val, SvIV(val) + 1);
+        fprintf(stderr, "NCM DEBUG:   found he: %d\n", SvIV(val));
+        SvIV_set(val, SvIV(val) + count);
     }
     else {
-fprintf(stderr, "NCM DEBUG:       hv_store_ent (no he)\n");
-        hv_store_ent(hv, tag, newSViv(1), 0);
-fprintf(stderr, "NCM DEBUG:       hv_store_ent RETURN\n");
+        fprintf(stderr, "NCM DEBUG:   no he\n");
+        hv_store_ent(hv, tag, newSViv(count), 0);
     }
-
-fprintf(stderr, "NCM DEBUG:     <hv_inc_count:\n");
+    fprintf(stderr, "NCM DEBUG:   new value: '%s': %d\n", SvPV_nolen(tag), SvIV(HeVAL(hv_fetch_ent(hv, tag, FALSE, 0))));
     LEAVE_DISARM_INFECT;
-    return;
+    fprintf(stderr, "NCM DEBUG: <hv_inc_count\n");
+}
+
+void add_tag_hash_count(pTHX_ SV *tags, SV *tag)
+{
+    assert(VALID_HV_TAGS(tags));
+    assert(tag);
+
+    fprintf(stderr, "NCM DEBUG: add_tag_hash_count: '%s'\n", SvPV_nolen(tag));
+    hv_inc_count(tags, tag, 1);
+}
+
+void combine_tags_hash_count(pTHX_ SV *src_tags, pTHX_ SV *dst_tags)
+{
+    assert(VALID_HV_TAGS(ohv));
+    assert(VALID_HV_TAGS(nhv));
+    fprintf(stderr, "NCM DEBUG: >combine_tags_hash_count\n");
+
+    HV *src_hv = (HV *)src_tags;
+
+    (void) hv_iterinit(src_hv);
+    HE *src_he;
+        ENTER_DISARM_INFECT;
+    while (src_he = hv_iternext(src_hv)) {
+        SV *tag = HeSVKEY_force(src_he);
+        SV *nval = HeVAL(src_he);
+        fprintf(stderr, "NCM DEBUG:   tag: '%s', val: %d\n", SvPV_nolen(tag), SvIV(nval));
+        hv_inc_count(dst_tags, tag, SvIV(nval));
+    }
+    LEAVE_DISARM_INFECT;
+    fprintf(stderr, "NCM DEBUG: <combine_tags_hash_count\n");
 }
 
 /*** FORWARD DECLARATIONS FOR MAGIC HANDLING ***/
@@ -295,48 +258,32 @@ static SV *make_hash_retval(pTHX_ MAGIC *mg)
     return newRV((SV *)results);
 }
 
-void infect_value_tags(pTHX_ SV *osv, MAGIC *omg, SV *nsv, MAGIC *nmg)
+void infect_value_tags(pTHX_ SV *src_sv, MAGIC *src_mg, SV *dst_sv, MAGIC *dummy)
 {
-    assert(osv);
-    assert(omg);
-    assert(nsv);
-fprintf(stderr, "NCM DEBUG: >infect_value_tags: osv: 0x%x, nsv: 0x%x\n", osv, nsv);
+    assert(src_sv);
+    assert(src_mg);
+    assert(dst_sv);
 
-    SV *vt_type = MgAUXSV(omg);
+    SV *src_tags = VALUETAGS(src_mg);
+    if (!src_tags) {
+        return;
+    }
+
+    SV *vt_type = MgAUXSV(src_mg);
     struct ValueTagsSpec *vt_spec = get_vt_spec(vt_type);
 
-    SV *ovt = VALUETAGS(omg);
-    if (!ovt) {
-fprintf(stderr, "NCM DEBUG: <infect_value_tags: no tags\n");
-        return;
-    }
+    // dst_mg is never passed in, since MGv2f_SCALARVALUE_INFECTIOUS is not set
+    MAGIC *dst_mg = get_value_tags_magic(vt_type, dst_sv);
 
-    // nmg is never set, since MGv2f_SCALARVALUE_INFECTIOUS is not set
-    nmg = get_value_tags_magic(vt_type, nsv);
-
-    if (!nmg) {
-        SV *nvt = vt_spec->behavior->dup_tags(aTHX_ ovt);
-        nmg = add_value_tags_magic(vt_type, nsv, nvt);
-fprintf(stderr, "NCM DEBUG: <infect_value_tags: dup_tags\n");
-        return;
+    if (dst_mg) {
+        vt_spec->behavior->combine_tags(aTHX_ src_tags, VALUETAGS(dst_mg));
     }
-
-    void *iter_cxt;
-fprintf(stderr, "NCM DEBUG:   iter_begin\n");
-    vt_spec->behavior->iter_begin(aTHX_ ovt, &iter_cxt);
-    SV *tag;
-    int foo = 0;
-fprintf(stderr, "NCM DEBUG:     iter_next: %d\n", foo++);
-    while ((tag = vt_spec->behavior->iter_next(aTHX_ ovt, &iter_cxt))) {
-fprintf(stderr, "NCM DEBUG:     add_tag: 0x%x\n", tag);
-        vt_spec->behavior->add_tag(aTHX_ VALUETAGS(nmg), tag);
-fprintf(stderr, "NCM DEBUG:     iter_next: %d\n", foo++);
+    else {
+        SV *dst_tags = vt_spec->behavior->dup_tags(aTHX_ src_tags);
+        (void) add_value_tags_magic(vt_type, dst_sv, dst_tags);
     }
-    if (vt_spec->behavior->iter_end) {
-        vt_spec->behavior->iter_end(aTHX_ ovt, &iter_cxt);
-    }
+}
 
-fprintf(stderr, "NCM DEBUG: <infect_value_tags\n");
 #ifdef DEBUG_TRACE_ANNOTATIONS
         // FIXME: handle adding trace magic somewhere
         // copying existing annotation: sv will always have debug tracing
@@ -344,57 +291,6 @@ fprintf(stderr, "NCM DEBUG: <infect_value_tags\n");
 //          sv_magicext(new, (SV *)make_traceav_copy(svp[idx]), PERL_MAGIC_ext, &vtbl_hound_debugtrace, NULL, 0);
 //      }
 #endif
-
-}
-
-static void iter_begin_array (pTHX_ SV *value_tags, void **iter_cxt)
-{
-    assert(value_tags);
-    assert(iter_cxt);
-    *(intptr_t *)iter_cxt = 0;
-}
-
-static SV *iter_next_array (pTHX_ SV *value_tags, void **iter_cxt)
-{
-    assert(value_tags);
-    assert(iter_cxt);
-    AV *av = (AV *)value_tags;
-    intptr_t *idxp = (intptr_t *)iter_cxt;
-    if (*idxp >= av_count(av)) {
-        return NULL;
-    }
-    SV **tag_ref = av_fetch(av, *idxp, 0);
-    if (!tag_ref)
-        croak("iter_next_array: av_fetch returned null");
-    SV *tag = *tag_ref;
-    (*idxp)++;
-    return tag;
-}
-
-static void iter_begin_hash (pTHX_ SV *value_tags, void **iter_cxt)
-{
-    assert(value_tags);
-    assert(iter_cxt);
-fprintf(stderr, "NCM DEBUG:     =iter_begin_hash\n");
-    (void) hv_iterinit((HV *)value_tags);
-};
-
-static SV *iter_next_hash (pTHX_ SV *value_tags, void **iter_cxt)
-{
-    assert(value_tags);
-    assert(iter_cxt);
-
-fprintf(stderr, "NCM DEBUG:     >iter_next_hash\n");
-    HE *he = hv_iternext((HV *)value_tags);
-
-fprintf(stderr, "NCM DEBUG:     he: 0x%x\n", he);
-    if (!he) {
-fprintf(stderr, "NCM DEBUG:     <iter_next_hash: NULL\n");
-        return NULL;
-    }
-
-    return HeVAL(he);
-}
 
 enum behavior_types {
     BEHAVIOR_UNIQUE_REF_ARRAY,
@@ -405,34 +301,28 @@ enum behavior_types {
 
 static const struct ValueTagsBehavior behaviors[] = {
     [BEHAVIOR_UNIQUE_REF_ARRAY] = {
-        .make_tags   = &make_array_value_tags,
-        .dup_tags    = &dup_array_value_tags,
-        .free_tags   = &free_value_tags,
-        .make_retval = &make_array_retval,
-        .add_tag     = &av_append_uniq,
-        .iter_begin  = &iter_begin_array,
-        .iter_next   = &iter_next_array,
-        .iter_end    = NULL,
+        .make_tags    = &make_array_value_tags,
+        .dup_tags     = &dup_array_value_tags,
+        .free_tags    = &free_value_tags,
+        .make_retval  = &make_array_retval,
+        .add_tag      = &add_tag_unique_ref_array,
+        .combine_tags = &combine_tags_unique_ref_array,
     },
     [BEHAVIOR_APPEND_ARRAY] = {
-        .make_tags   = &make_array_value_tags,
-        .dup_tags    = &dup_array_value_tags,
-        .free_tags   = &free_value_tags,
-        .make_retval = &make_array_retval,
-        .add_tag     = &av_append,
-        .iter_begin  = &iter_begin_array,
-        .iter_next   = &iter_next_array,
-        .iter_end    = NULL,
+        .make_tags    = &make_array_value_tags,
+        .dup_tags     = &dup_array_value_tags,
+        .free_tags    = &free_value_tags,
+        .make_retval  = &make_array_retval,
+        .add_tag      = &add_tag_append_array,
+        .combine_tags = &combine_tags_append_array,
     },
     [BEHAVIOR_HASH_COUNT] = {
-        .make_tags   = &make_hash_value_tags,
-        .dup_tags    = &dup_hash_value_tags,
-        .free_tags   = &free_value_tags,
-        .make_retval = &make_hash_retval,
-        .add_tag     = &hv_inc_count,
-        .iter_begin  = &iter_begin_hash,
-        .iter_next   = &iter_next_hash,
-        .iter_end    = NULL,
+        .make_tags    = &make_hash_value_tags,
+        .dup_tags     = &dup_hash_value_tags,
+        .free_tags    = &free_value_tags,
+        .make_retval  = &make_hash_retval,
+        .add_tag      = &add_tag_hash_count,
+        .combine_tags = &combine_tags_hash_count,
     },
 };
 
@@ -637,7 +527,9 @@ add_value_tag (SV *vt_type_ref, SV *sv_ref, SV *tag)
 
     MAGIC *mg = init_value_tags_magic(vt_type, SvRV(sv_ref), NULL);
 
-    vt_spec->behavior->add_tag(aTHX_ VALUETAGS(mg), tag);
+    SV *tags = VALUETAGS(mg);
+    fprintf(stderr, "NCM DEBUG: ->add_tag('%s')\n", SvPV_nolen(tag));
+    vt_spec->behavior->add_tag(aTHX_ tags, tag);
 #endif
 
 SV *

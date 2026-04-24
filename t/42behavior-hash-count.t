@@ -20,7 +20,14 @@ my $vt_type;
     say STDERR "TEST: tag: '$tag'";
     add_value_tag( $vt_type, \$var_one, $tag );
 
+    is( get_value_tags( $vt_type, \$var_one ), {$tag => 1},
+        'get_value_tags should return tags from tagged variable' );
+
     my $var_two = 456;
+
+    is( get_value_tags( $vt_type, \$var_two ), undef,
+        'get_value_tags should return undef from untagged variable' );
+
     say STDERR "TEST: var_two: " . \$var_two;
 
     say STDERR "TEST: combine var_one and var_two";
@@ -57,15 +64,14 @@ my $vt_type;
     my $combined = $var_one + $var_two;
     say STDERR "TEST: done combining var_one and var_two";
 
-    # FIXME: is tag order deterministic in implementation?
     is( get_value_tags( $vt_type, \$combined ), {$tag_one => 1, $tag_two => 1},
         'get_value_tags should return both tags' );
 }
 
 # combining duplicate tags
 {
-    my $tag_one = { tag => 'one' };
-    my $tag_two = { tag => 'two' };
+    my $tag_one = 'tag_one';
+    my $tag_two = 'tag_two';
 
     my $var = 123;
     add_value_tag( $vt_type, \$var, $tag_one );

@@ -18,7 +18,13 @@ my $vt_type;
     my $tag = { tag => 'one' };
     add_value_tag( $vt_type, \$var_one, $tag );
 
+    is( get_value_tags( $vt_type, \$var_one ), [$tag],
+        'get_value_tags should return tags from tagged variable' );
+
     my $var_two = 456;
+
+    is( get_value_tags( $vt_type, \$var_two ), undef,
+        'get_value_tags should return undef from untagged variable' );
 
     my $in_order = $var_one + $var_two;
 
