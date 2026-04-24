@@ -25,6 +25,15 @@
 #  define HAVE_VALUE_MAGIC
 #endif
 
+// outside of HAVE_VALUE_MAGIC, since SVTAGS_* needs to return the values
+// FIXME: how should API functions behave without scalar value magic?
+enum behavior_types {
+    BEHAVIOR_UNIQUE_REF_ARRAY,
+    BEHAVIOR_APPEND_ARRAY,
+    BEHAVIOR_HASH_COUNT,
+    MAX_BEHAVIOR
+};
+
 #ifdef HAVE_VALUE_MAGIC
 #  define ENTER_DISARM_INFECT \
   ENTER;  \
@@ -281,13 +290,6 @@ void infect_value_tags(pTHX_ SV *src_sv, MAGIC *src_mg, SV *dst_sv, MAGIC *dummy
 //          sv_magicext(new, (SV *)make_traceav_copy(svp[idx]), PERL_MAGIC_ext, &vtbl_hound_debugtrace, NULL, 0);
 //      }
 #endif
-
-enum behavior_types {
-    BEHAVIOR_UNIQUE_REF_ARRAY,
-    BEHAVIOR_APPEND_ARRAY,
-    BEHAVIOR_HASH_COUNT,
-    MAX_BEHAVIOR
-};
 
 static const struct ValueTagsBehavior behaviors[] = {
     [BEHAVIOR_UNIQUE_REF_ARRAY] = {
