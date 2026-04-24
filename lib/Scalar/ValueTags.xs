@@ -66,7 +66,6 @@ void av_append_tag(pTHX_ SV *sav, SV *tag, Size_t check_uniq)
 {
     assert(VALID_AV_TAGS(sav));
     assert(SvROK(tag));
-    fprintf(stderr, "NCM DEBUG: av_append_tag '%s'\n", SvPV_nolen(tag));
 
     AV *av = (AV *)sav;
 
@@ -138,23 +137,18 @@ void hv_inc_count (pTHX_ SV *tags, SV *tag, Size_t count)
     assert(VALID_HV_TAGS(tags));
     assert(tag);
 
-    fprintf(stderr, "NCM DEBUG: >hv_inc_count: '%s': %d\n", SvPV_nolen(tag), count);
     HV *hv = (HV *)tags;
     HE *he = hv_fetch_ent(hv, tag, FALSE, 0);
 
     ENTER_DISARM_INFECT;    // avoid recursive infection
     if (he) {
         SV *val = HeVAL(he);
-        fprintf(stderr, "NCM DEBUG:   found he: %d\n", SvIV(val));
         SvIV_set(val, SvIV(val) + count);
     }
     else {
-        fprintf(stderr, "NCM DEBUG:   no he\n");
         hv_store_ent(hv, tag, newSViv(count), 0);
     }
-    fprintf(stderr, "NCM DEBUG:   new value: '%s': %d\n", SvPV_nolen(tag), SvIV(HeVAL(hv_fetch_ent(hv, tag, FALSE, 0))));
     LEAVE_DISARM_INFECT;
-    fprintf(stderr, "NCM DEBUG: <hv_inc_count\n");
 }
 
 void add_tag_hash_count(pTHX_ SV *tags, SV *tag)
@@ -162,7 +156,6 @@ void add_tag_hash_count(pTHX_ SV *tags, SV *tag)
     assert(VALID_HV_TAGS(tags));
     assert(tag);
 
-    fprintf(stderr, "NCM DEBUG: add_tag_hash_count: '%s'\n", SvPV_nolen(tag));
     hv_inc_count(tags, tag, 1);
 }
 
@@ -170,7 +163,6 @@ void combine_tags_hash_count(pTHX_ SV *src_tags, pTHX_ SV *dst_tags)
 {
     assert(VALID_HV_TAGS(ohv));
     assert(VALID_HV_TAGS(nhv));
-    fprintf(stderr, "NCM DEBUG: >combine_tags_hash_count\n");
 
     HV *src_hv = (HV *)src_tags;
 
@@ -180,11 +172,9 @@ void combine_tags_hash_count(pTHX_ SV *src_tags, pTHX_ SV *dst_tags)
     while (src_he = hv_iternext(src_hv)) {
         SV *tag = HeSVKEY_force(src_he);
         SV *nval = HeVAL(src_he);
-        fprintf(stderr, "NCM DEBUG:   tag: '%s', val: %d\n", SvPV_nolen(tag), SvIV(nval));
         hv_inc_count(dst_tags, tag, SvIV(nval));
     }
     LEAVE_DISARM_INFECT;
-    fprintf(stderr, "NCM DEBUG: <combine_tags_hash_count\n");
 }
 
 /*** FORWARD DECLARATIONS FOR MAGIC HANDLING ***/
@@ -528,7 +518,6 @@ add_value_tag (SV *vt_type_ref, SV *sv_ref, SV *tag)
     MAGIC *mg = init_value_tags_magic(vt_type, SvRV(sv_ref), NULL);
 
     SV *tags = VALUETAGS(mg);
-    fprintf(stderr, "NCM DEBUG: ->add_tag('%s')\n", SvPV_nolen(tag));
     vt_spec->behavior->add_tag(aTHX_ tags, tag);
 #endif
 
