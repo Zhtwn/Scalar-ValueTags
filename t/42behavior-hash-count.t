@@ -15,9 +15,7 @@ my $vt_type;
 # combining one tagged variable with one untagged variable
 {
     my $var_one = 123;
-    say STDERR "TEST: var_one: " . \$var_one;
     my $tag = 'test_tag';
-    say STDERR "TEST: tag: '$tag'";
     add_value_tag( $vt_type, \$var_one, $tag );
 
     is( get_value_tags( $vt_type, \$var_one ), {$tag => 1},
@@ -28,15 +26,11 @@ my $vt_type;
     is( get_value_tags( $vt_type, \$var_two ), undef,
         'get_value_tags should return undef from untagged variable' );
 
-    say STDERR "TEST: var_two: " . \$var_two;
-
-    say STDERR "TEST: combine var_one and var_two";
     my $in_order = $var_one + $var_two;
 
     is( get_value_tags( $vt_type, \$in_order ), {$tag => 1},
         'get_value_tags should return initial tag when tag is on first variable' );
 
-    say STDERR "TEST: combine var_two and var_one";
     my $out_of_order = $var_two + $var_one;
     is( get_value_tags( $vt_type, \$out_of_order ), {$tag => 1},
         'get_value_tags should return initial tag when tag is on second variable' );
@@ -46,7 +40,6 @@ my $vt_type;
 {
     my $var_one = 123;
     my $tag_one = 'tag_one';
-    say STDERR "TEST: add tag on var_one: '$tag_one'";
     add_value_tag( $vt_type, \$var_one, $tag_one );
 
     is( get_value_tags( $vt_type, \$var_one ), {$tag_one => 1},
@@ -54,15 +47,12 @@ my $vt_type;
 
     my $var_two = 456;
     my $tag_two = 'tag_two';
-    say STDERR "TEST: add tag on var_two: '$tag_two'";
     add_value_tag( $vt_type, \$var_two, $tag_two );
 
     is( get_value_tags( $vt_type, \$var_two ), {$tag_two => 1},
         'get_value_tags on second variable should be correct' );
 
-    say STDERR "TEST: combine var_one and var_two";
     my $combined = $var_one + $var_two;
-    say STDERR "TEST: done combining var_one and var_two";
 
     is( get_value_tags( $vt_type, \$combined ), {$tag_one => 1, $tag_two => 1},
         'get_value_tags should return both tags' );
