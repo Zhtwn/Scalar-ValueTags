@@ -53,7 +53,7 @@ struct ValueTagsBehavior {
     SV*  (*dup_tags)(pTHX_ SV *tags);
     void (*free_tags)(pTHX_ SV *sv, MAGIC *mg);   // FIXME: needed?
     void (*add_tag)(pTHX_ SV *tags, SV *tag);
-    void (*combine_tags)(pTHX_ SV *tags, SV *tags);
+    void (*combine_tags)(pTHX_ SV *src_tags, SV *dst_tags);
     SV*  (*make_retval)(pTHX_ MAGIC *mg);
 };
 
