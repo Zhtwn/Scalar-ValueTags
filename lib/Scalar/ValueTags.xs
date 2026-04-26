@@ -71,12 +71,10 @@ struct ValueTagsSpec {
 
 /*** UTILTIIES ***/
 
-void av_append_tag(pTHX_ SV *sav, SV *tag, Size_t check_uniq)
+void av_append_tag(pTHX_ AV *av, SV *tag, Size_t check_uniq)
 {
     assert(VALID_AV_TAGS(sav));
     assert(SvROK(tag));
-
-    AV *av = (AV *)sav;
 
     if (check_uniq) {
         SV **svp = AvARRAY(av);
@@ -99,7 +97,7 @@ void add_tag_unique_ref_array (pTHX_ SV *tags, SV *tag)
     assert(SvROK(tag));
 
     // always check_uniq
-    av_append_tag(aTHX_ tags, tag, 1);
+    av_append_tag(aTHX_ (AV *)tags, tag, 1);
 }
 
 void combine_tags_unique_ref_array (pTHX_ SV *src_tags, SV *dst_tags)
@@ -114,7 +112,7 @@ void combine_tags_unique_ref_array (pTHX_ SV *src_tags, SV *dst_tags)
     SV **svp = AvARRAY(src_av);
     Size_t count = av_count(src_av);
     for (U32 idx = 0; idx < count; idx++) {
-        av_append_tag(aTHX_ dst_tags, svp[idx], check_uniq);
+        av_append_tag(aTHX_ (AV *)dst_tags, svp[idx], check_uniq);
     }
 }
 
@@ -124,7 +122,7 @@ void add_tag_append_array (pTHX_ SV *tags, SV *tag)
     assert(SvROK(tag));
 
     // never check_uniq
-    av_append_tag(aTHX_ tags, tag, 0);
+    av_append_tag(aTHX_ (AV *)tags, tag, 0);
 }
 
 void combine_tags_append_array (pTHX_ SV *src_tags, SV *dst_tags)
@@ -137,7 +135,7 @@ void combine_tags_append_array (pTHX_ SV *src_tags, SV *dst_tags)
     Size_t count = av_count(oav);
     for (U32 idx = 0; idx < count; idx++) {
         // never check_uniq; always append
-        av_append_tag(aTHX_ dst_tags, svp[idx], 0);
+        av_append_tag(aTHX_ (AV *)dst_tags, svp[idx], 0);
     }
 }
 
