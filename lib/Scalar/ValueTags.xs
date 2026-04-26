@@ -50,10 +50,10 @@ struct ValueTagsUserStruct {
 
 struct ValueTagsBehavior {
     SV*  (*make_tags)(pTHX);
-    SV*  (*dup_tags)(pTHX_ SV *value_tags);
+    SV*  (*dup_tags)(pTHX_ SV *tags);
     void (*free_tags)(pTHX_ SV *sv, MAGIC *mg);   // FIXME: needed?
-    void (*add_tag)(pTHX_ SV *sv, SV *tag);
-    void (*combine_tags)(pTHX_ SV *sv, SV *tag);
+    void (*add_tag)(pTHX_ SV *tags, SV *tag);
+    void (*combine_tags)(pTHX_ SV *tags, SV *tags);
     SV*  (*make_retval)(pTHX_ MAGIC *mg);
 };
 
