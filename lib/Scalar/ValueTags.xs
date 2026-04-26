@@ -180,7 +180,7 @@ void combine_tags_hash_count(pTHX_ SV *src_tags, pTHX_ SV *dst_tags)
     ENTER_DISARM_INFECT;    // avoid PL_viralmagic_annotations copying of magic
     HE *src_he;
     while (src_he = hv_iternext(src_hv)) {
-        SV *tag = HeSVKEY_force(src_he);
+        SV *tag = HeSVKEY_force(src_he);     // FIXME: use string keys, not SVs
         SV *nval = HeVAL(src_he);
         hv_inc_count(dst_tags, tag, SvIV(nval));
     }
