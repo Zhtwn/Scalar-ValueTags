@@ -149,7 +149,6 @@ void hv_inc_count (pTHX_ SV *tags, SV *tag, Size_t count)
     HV *hv = (HV *)tags;
     HE *he = hv_fetch_ent(hv, tag, FALSE, 0);
 
-    ENTER_DISARM_INFECT;    // avoid recursive infection
     if (he) {
         SV *val = HeVAL(he);
         SvIV_set(val, SvIV(val) + count);
@@ -157,7 +156,6 @@ void hv_inc_count (pTHX_ SV *tags, SV *tag, Size_t count)
     else {
         hv_store_ent(hv, tag, newSViv(count), 0);
     }
-    LEAVE_DISARM_INFECT;
 }
 
 void add_tag_hash_count(pTHX_ SV *tags, SV *tag)
@@ -165,7 +163,9 @@ void add_tag_hash_count(pTHX_ SV *tags, SV *tag)
     assert(VALID_HV_TAGS(tags));
     assert(tag);
 
+    ENTER_DISARM_INFECT;    // avoid PL_viralmagic_annotations copying of magic
     hv_inc_count(tags, tag, 1);
+    LEAVE_DISARM_INFECT;
 }
 
 void combine_tags_hash_count(pTHX_ SV *src_tags, pTHX_ SV *dst_tags)
@@ -176,8 +176,9 @@ void combine_tags_hash_count(pTHX_ SV *src_tags, pTHX_ SV *dst_tags)
     HV *src_hv = (HV *)src_tags;
 
     (void) hv_iterinit(src_hv);
+
+    ENTER_DISARM_INFECT;    // avoid PL_viralmagic_annotations copying of magic
     HE *src_he;
-        ENTER_DISARM_INFECT;
     while (src_he = hv_iternext(src_hv)) {
         SV *tag = HeSVKEY_force(src_he);
         SV *nval = HeVAL(src_he);
