@@ -520,6 +520,8 @@ add_value_tag (SV *vt_type_ref, SV *sv_ref, SV *tag)
 
     SV *vt_type = SvRV(vt_type_ref);
     struct ValueTagsSpec *vt_spec = get_vt_spec(vt_type);
+    if (!vt_spec)
+        croak("Unregistered vt_type");
 
     MAGIC *mg = init_value_tags_magic(vt_type, SvRV(sv_ref), NULL);
 
@@ -540,6 +542,8 @@ get_value_tags (SV *vt_type_ref, SV *sv_ref)
     MAGIC *mg = get_value_tags_magic(vt_type, sv);
 
     struct ValueTagsSpec *vt_spec = get_vt_spec(vt_type);
+    if (!vt_spec)
+        croak("Unregistered vt_type");
 
     if (mg) {
         RETVAL = vt_spec->behavior->make_retval(aTHX_ mg);
@@ -561,6 +565,10 @@ clear_value_tags (SV *vt_type_ref, SV *sv_ref)
     VALIDATE_SV_TARGET(sv_ref);
 
     SV *vt_type = SvRV(vt_type_ref);
+    struct ValueTagsSpec *vt_spec = get_vt_spec(vt_type);
+    if (!vt_spec)
+        croak("Unregistered vt_type");
+
     SV *sv = SvRV(sv_ref);
     MAGIC *mg = get_value_tags_magic(vt_type, sv);
 
