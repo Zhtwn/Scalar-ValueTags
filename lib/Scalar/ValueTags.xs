@@ -449,6 +449,13 @@ static MAGIC *S_remove_value_tags_magic(pTHX_ SV *vt_type, SV *sv)
 
 /*** API ***/
 
+#define VALIDATE_VT_TYPE(vt_type_ref) \
+    if (!VALID_VT_TYPE_REF(vt_type_ref)) croak("Invalid vt_type");
+
+#define VALIDATE_SV_TARGET(sv_ref) \
+    if (!SvROK(sv_ref) || SvTYPE(SvRV(sv_ref)) > SVt_PVMG) \
+        croak("Expected a SCALAR reference for target variable");
+
 MODULE = Scalar::ValueTags  PACKAGE = Scalar::ValueTags
 
 int
@@ -506,10 +513,8 @@ void
 add_value_tag (SV *vt_type_ref, SV *sv_ref, SV *tag)
   CODE:
 #ifdef HAVE_VALUE_MAGIC
-    if (!VALID_VT_TYPE_REF(vt_type_ref))
-        croak("Expected a SCALAR reference for vt_type");   // FIXME - need better validation
-    if (!SvROK(sv_ref) || SvTYPE(SvRV(sv_ref)) > SVt_PVMG)
-        croak("Expected a SCALAR reference for target variable");
+    VALIDATE_VT_TYPE(vt_type_ref);
+    VALIDATE_SV_TARGET(sv_ref);
 
     // FIXME: add tag validation to vt_spec, and validate tag here
 
@@ -526,10 +531,8 @@ SV *
 get_value_tags (SV *vt_type_ref, SV *sv_ref)
   CODE:
 #ifdef HAVE_VALUE_MAGIC
-    if (!VALID_VT_TYPE_REF(vt_type_ref))
-        croak("Expected a SCALAR reference for vt_type");   // FIXME - need better validation
-    if (!SvROK(sv_ref) || SvTYPE(SvRV(sv_ref)) > SVt_PVMG)
-        croak("Expected a SCALAR reference for target variable");
+    VALIDATE_VT_TYPE(vt_type_ref);
+    VALIDATE_SV_TARGET(sv_ref);
 
     SV *vt_type = SvRV(vt_type_ref);
     SV *sv = SvRV(sv_ref);
@@ -554,10 +557,8 @@ void
 clear_value_tags (SV *vt_type_ref, SV *sv_ref)
   CODE:
 #ifdef HAVE_VALUE_MAGIC
-    if (!VALID_VT_TYPE_REF(vt_type_ref))
-        croak("Expected a SCALAR reference for vt_type");   // FIXME - need better validation
-    if (!SvROK(sv_ref) || SvTYPE(SvRV(sv_ref)) > SVt_PVMG)
-        croak("Expected a SCALAR reference for target variable");
+    VALIDATE_VT_TYPE(vt_type_ref);
+    VALIDATE_SV_TARGET(sv_ref);
 
     SV *vt_type = SvRV(vt_type_ref);
     SV *sv = SvRV(sv_ref);
