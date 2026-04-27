@@ -492,7 +492,7 @@ SV *
 register_value_tags_type (SV *behavior)
   CODE:
 #ifdef HAVE_VALUE_MAGIC
-    if (!SvIOK(behavior))
+    if (!SvOK(behavior) || !SvIOK(behavior))
       croak("Expected an integer for behavior");    // FIXME: need better error
     IV idx = SvIV(behavior);
     if (idx < 0 || idx >= MAX_BEHAVIOR)
