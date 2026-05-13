@@ -139,7 +139,7 @@ static void merge_tags_append_array (pTHX_ SV *src_tags, SV *dst_tags)
     }
 }
 
-static void hv_inc_count (pTHX_ SV *tags, SV *tag, Size_t count)
+static void hv_inc_val (pTHX_ SV *tags, SV *tag, Size_t count)
 {
     assert(VALID_HV_TAGS(tags));
     assert(tag);
@@ -162,7 +162,7 @@ static void add_tag_hash_count(pTHX_ SV *tags, SV *tag)
     assert(tag);
 
     ENTER_DISARM_INFECT;    // avoid PL_viralmagic_annotations copying of magic
-    hv_inc_count(tags, tag, 1);
+    hv_inc_val(tags, tag, 1);
     LEAVE_DISARM_INFECT;
 }
 
