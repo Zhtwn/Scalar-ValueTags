@@ -53,7 +53,7 @@ struct ValueTagsBehavior {
     SV*  (*dup_tags)(pTHX_ SV *tags);
     void (*free_tags)(pTHX_ SV *sv, MAGIC *mg);   // FIXME: needed?
     void (*add_tag)(pTHX_ SV *tags, SV *tag);
-    void (*combine_tags)(pTHX_ SV *src_tags, SV *dst_tags);
+    void (*merge_tags)(pTHX_ SV *src_tags, SV *dst_tags);
     SV*  (*make_retval)(pTHX_ MAGIC *mg);
 };
 
@@ -100,7 +100,7 @@ void add_tag_unique_ref_array (pTHX_ SV *tags, SV *tag)
     av_append_tag(aTHX_ (AV *)tags, tag, 1);
 }
 
-void combine_tags_unique_ref_array (pTHX_ SV *src_tags, SV *dst_tags)
+void merge_tags_unique_ref_array (pTHX_ SV *src_tags, SV *dst_tags)
 {
     assert(VALID_AV_TAGS(src_tags));
     assert(VALID_AV_TAGS(dst_tags));
@@ -125,7 +125,7 @@ void add_tag_append_array (pTHX_ SV *tags, SV *tag)
     av_append_tag(aTHX_ (AV *)tags, tag, 0);
 }
 
-void combine_tags_append_array (pTHX_ SV *src_tags, SV *dst_tags)
+void merge_tags_append_array (pTHX_ SV *src_tags, SV *dst_tags)
 {
     assert(VALID_AV_TAGS(src_tags));
     assert(VALID_AV_TAGS(dst_tags));
@@ -166,7 +166,7 @@ void add_tag_hash_count(pTHX_ SV *tags, SV *tag)
     LEAVE_DISARM_INFECT;
 }
 
-void combine_tags_hash_count(pTHX_ SV *src_tags, pTHX_ SV *dst_tags)
+void merge_tags_hash_count(pTHX_ SV *src_tags, pTHX_ SV *dst_tags)
 {
     assert(VALID_HV_TAGS(ohv));
     assert(VALID_HV_TAGS(nhv));
@@ -278,7 +278,7 @@ void infect_value_tags(pTHX_ SV *src_sv, MAGIC *src_mg, SV *dst_sv, MAGIC *dummy
     MAGIC *dst_mg = get_value_tags_magic(vt_type, dst_sv);
 
     if (dst_mg) {
-        vt_spec->behavior->combine_tags(aTHX_ src_tags, VALUETAGS(dst_mg));
+        vt_spec->behavior->merge_tags(aTHX_ src_tags, VALUETAGS(dst_mg));
     }
     else {
         SV *dst_tags = vt_spec->behavior->dup_tags(aTHX_ src_tags);
@@ -296,28 +296,28 @@ void infect_value_tags(pTHX_ SV *src_sv, MAGIC *src_mg, SV *dst_sv, MAGIC *dummy
 
 static const struct ValueTagsBehavior behaviors[] = {
     [BEHAVIOR_UNIQUE_REF_ARRAY] = {
-        .make_tags    = &make_array_value_tags,
-        .dup_tags     = &dup_array_value_tags,
-        .free_tags    = &free_value_tags,
-        .make_retval  = &make_array_retval,
-        .add_tag      = &add_tag_unique_ref_array,
-        .combine_tags = &combine_tags_unique_ref_array,
+        .make_tags   = &make_array_value_tags,
+        .dup_tags    = &dup_array_value_tags,
+        .free_tags   = &free_value_tags,
+        .make_retval = &make_array_retval,
+        .add_tag     = &add_tag_unique_ref_array,
+        .merge_tags  = &merge_tags_unique_ref_array,
     },
     [BEHAVIOR_APPEND_ARRAY] = {
-        .make_tags    = &make_array_value_tags,
-        .dup_tags     = &dup_array_value_tags,
-        .free_tags    = &free_value_tags,
-        .make_retval  = &make_array_retval,
-        .add_tag      = &add_tag_append_array,
-        .combine_tags = &combine_tags_append_array,
+        .make_tags   = &make_array_value_tags,
+        .dup_tags    = &dup_array_value_tags,
+        .free_tags   = &free_value_tags,
+        .make_retval = &make_array_retval,
+        .add_tag     = &add_tag_append_array,
+        .merge_tags  = &merge_tags_append_array,
     },
     [BEHAVIOR_HASH_COUNT] = {
-        .make_tags    = &make_hash_value_tags,
-        .dup_tags     = &dup_hash_value_tags,
-        .free_tags    = &free_value_tags,
-        .make_retval  = &make_hash_retval,
-        .add_tag      = &add_tag_hash_count,
-        .combine_tags = &combine_tags_hash_count,
+        .make_tags   = &make_hash_value_tags,
+        .dup_tags    = &dup_hash_value_tags,
+        .free_tags   = &free_value_tags,
+        .make_retval = &make_hash_retval,
+        .add_tag     = &add_tag_hash_count,
+        .merge_tags  = &merge_tags_hash_count,
     },
 };
 
