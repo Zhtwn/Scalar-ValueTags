@@ -66,8 +66,8 @@ struct ValueTagsSpec {
 #define VALUETAGS(mg) (MgUSERSTRUCT(mg, struct ValueTagsUserStruct *)->value_tags)
 
 #define VALID_VT_TYPE_REF(ref) (SvROK(ref) && SvTYPE(SvRV(ref)) <= SVt_PVMG)
-#define VALID_AV_TAGS(sv) (SvOK(sv) && SvTYPE(sv) == SVt_PVAV)
-#define VALID_HV_TAGS(sv) (SvOK(sv) && SvTYPE(sv) == SVt_PVHV)
+#define VALID_AV_TAGS(sv) (SvTYPE(sv) == SVt_PVAV)
+#define VALID_HV_TAGS(sv) (SvTYPE(sv) == SVt_PVHV)
 
 /*** UTILTIIES ***/
 
