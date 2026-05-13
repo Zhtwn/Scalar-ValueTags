@@ -260,11 +260,12 @@ static SV *make_hash_retval(pTHX_ MAGIC *mg)
     return newRV((SV *)results);
 }
 
-static void infect_value_tags(pTHX_ SV *src_sv, MAGIC *src_mg, SV *dst_sv, MAGIC *dummy)
+static void infect_value_tags(pTHX_ SV *src_sv, MAGIC *src_mg, SV *dst_sv, MAGIC *dst_mg)
 {
     assert(src_sv);
     assert(src_mg);
     assert(dst_sv);
+    assert(!dst_mg);
 
     SV *src_tags = VALUETAGS(src_mg);
     if (!src_tags) {
@@ -275,7 +276,7 @@ static void infect_value_tags(pTHX_ SV *src_sv, MAGIC *src_mg, SV *dst_sv, MAGIC
     struct ValueTagsSpec *vt_spec = get_vt_spec(vt_type);
 
     // dst_mg is never passed in, since MGv2f_SCALARVALUE_INFECTIOUS is not set
-    MAGIC *dst_mg = get_value_tags_magic(vt_type, dst_sv);
+    dst_mg = get_value_tags_magic(vt_type, dst_sv);
 
     if (dst_mg) {
         vt_spec->behavior->merge_tags(aTHX_ src_tags, VALUETAGS(dst_mg));
