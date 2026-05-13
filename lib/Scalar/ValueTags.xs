@@ -283,7 +283,7 @@ static void infect_value_tags(pTHX_ SV *src_sv, MAGIC *src_mg, SV *dst_sv, MAGIC
     }
     else {
         SV *dst_tags = vt_spec->behavior->dup_tags(aTHX_ src_tags);
-        (void) add_value_tags_magic(vt_type, dst_sv, dst_tags);
+        add_value_tags_magic(vt_type, dst_sv, dst_tags);
     }
 }
 
