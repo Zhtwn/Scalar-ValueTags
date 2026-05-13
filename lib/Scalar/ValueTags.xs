@@ -71,7 +71,7 @@ struct ValueTagsSpec {
 
 /*** UTILTIIES ***/
 
-void av_append_tag(pTHX_ AV *av, SV *tag, bool check_uniq)
+static void av_append_tag(pTHX_ AV *av, SV *tag, bool check_uniq)
 {
     assert(VALID_AV_TAGS(sav));
     assert(SvROK(tag));
@@ -91,7 +91,7 @@ void av_append_tag(pTHX_ AV *av, SV *tag, bool check_uniq)
     av_push_simple(av, ret);
 }
 
-void add_tag_unique_ref_array (pTHX_ SV *tags, SV *tag)
+static void add_tag_unique_ref_array (pTHX_ SV *tags, SV *tag)
 {
     assert(VALID_AV_TAGS(tags));
     assert(SvROK(tag));
@@ -100,7 +100,7 @@ void add_tag_unique_ref_array (pTHX_ SV *tags, SV *tag)
     av_append_tag(aTHX_ (AV *)tags, tag, true);
 }
 
-void merge_tags_unique_ref_array (pTHX_ SV *src_tags, SV *dst_tags)
+static void merge_tags_unique_ref_array (pTHX_ SV *src_tags, SV *dst_tags)
 {
     assert(VALID_AV_TAGS(src_tags));
     assert(VALID_AV_TAGS(dst_tags));
@@ -116,7 +116,7 @@ void merge_tags_unique_ref_array (pTHX_ SV *src_tags, SV *dst_tags)
     }
 }
 
-void add_tag_append_array (pTHX_ SV *tags, SV *tag)
+static void add_tag_append_array (pTHX_ SV *tags, SV *tag)
 {
     assert(VALID_AV_TAGS(tags));
     assert(SvROK(tag));
@@ -125,7 +125,7 @@ void add_tag_append_array (pTHX_ SV *tags, SV *tag)
     av_append_tag(aTHX_ (AV *)tags, tag, false);
 }
 
-void merge_tags_append_array (pTHX_ SV *src_tags, SV *dst_tags)
+static void merge_tags_append_array (pTHX_ SV *src_tags, SV *dst_tags)
 {
     assert(VALID_AV_TAGS(src_tags));
     assert(VALID_AV_TAGS(dst_tags));
@@ -139,7 +139,7 @@ void merge_tags_append_array (pTHX_ SV *src_tags, SV *dst_tags)
     }
 }
 
-void hv_inc_count (pTHX_ SV *tags, SV *tag, Size_t count)
+static void hv_inc_count (pTHX_ SV *tags, SV *tag, Size_t count)
 {
     assert(VALID_HV_TAGS(tags));
     assert(tag);
@@ -156,7 +156,7 @@ void hv_inc_count (pTHX_ SV *tags, SV *tag, Size_t count)
     }
 }
 
-void add_tag_hash_count(pTHX_ SV *tags, SV *tag)
+static void add_tag_hash_count(pTHX_ SV *tags, SV *tag)
 {
     assert(VALID_HV_TAGS(tags));
     assert(tag);
@@ -166,7 +166,7 @@ void add_tag_hash_count(pTHX_ SV *tags, SV *tag)
     LEAVE_DISARM_INFECT;
 }
 
-void merge_tags_hash_count(pTHX_ SV *src_tags, pTHX_ SV *dst_tags)
+static void merge_tags_hash_count(pTHX_ SV *src_tags, pTHX_ SV *dst_tags)
 {
     assert(VALID_HV_TAGS(ohv));
     assert(VALID_HV_TAGS(nhv));
@@ -260,7 +260,7 @@ static SV *make_hash_retval(pTHX_ MAGIC *mg)
     return newRV((SV *)results);
 }
 
-void infect_value_tags(pTHX_ SV *src_sv, MAGIC *src_mg, SV *dst_sv, MAGIC *dummy)
+static void infect_value_tags(pTHX_ SV *src_sv, MAGIC *src_mg, SV *dst_sv, MAGIC *dummy)
 {
     assert(src_sv);
     assert(src_mg);
