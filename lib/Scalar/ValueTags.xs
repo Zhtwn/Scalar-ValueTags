@@ -172,15 +172,19 @@ void combine_tags_hash_count(pTHX_ SV *src_tags, pTHX_ SV *dst_tags)
     assert(VALID_HV_TAGS(nhv));
 
     HV *src_hv = (HV *)src_tags;
+    HV *dst_hv = (HV *)dst_tags;
 
-    (void) hv_iterinit(src_hv);
+    hv_iterinit(src_hv);
 
-    ENTER_DISARM_INFECT;    // avoid PL_viralmagic_annotations copying of magic
     HE *src_he;
+    ENTER_DISARM_INFECT;    // avoid PL_viralmagic_annotations copying of magic on hash values
     while (src_he = hv_iternext(src_hv)) {
-        SV *tag = HeSVKEY_force(src_he);     // FIXME: use string keys, not SVs
-        SV *nval = HeVAL(src_he);
-        hv_inc_count(dst_tags, tag, SvIV(nval));
+        SV *src_val = HeVAL(src_he);
+        SV **dst_valp = hv_fetch(dst_hv, HeKEY(src_he), HeKLEN(src_he), 0);
+        if (dst_valp && *dst_valp)
+            sv_setiv(*dst_valp, SvIV(src_val) + SvIV(*dst_valp));
+        else
+            hv_store(dst_hv, HeKEY(src_he), HeKLEN(src_he), newSVsv(src_val), HeHASH(src_he));
     }
     LEAVE_DISARM_INFECT;
 }
