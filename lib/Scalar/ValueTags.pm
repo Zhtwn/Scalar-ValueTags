@@ -10,6 +10,7 @@ our @EXPORT = qw(
     SVTAGS_UNIQUE_REF_ARRAY
     SVTAGS_APPEND_ARRAY
     SVTAGS_HASH_COUNT
+    SVTAGS_UNIQUE_HASH
     value_tags_enabled
     register_value_tags_type
     add_value_tag
