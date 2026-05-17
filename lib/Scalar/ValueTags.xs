@@ -31,6 +31,7 @@ enum behavior_types {
     BEHAVIOR_UNIQUE_REF_ARRAY,
     BEHAVIOR_APPEND_ARRAY,
     BEHAVIOR_HASH_COUNT,
+    BEHAVIOR_UNIQUE_HASH,
     MAX_BEHAVIOR
 };
 
@@ -180,6 +181,37 @@ static void merge_tags_hash_count(pTHX_ SV *src_tags, pTHX_ SV *dst_tags)
     LEAVE_DISARM_INFECT;
 }
 
+static void add_tag_unique_hash(pTHX_ SV *tags, SV *tag)
+{
+    assert(VALID_HV_TAGS(tags));
+    assert(SvPOK(tag));
+
+    HV *hv = (HV *)tags;
+    HE *he = hv_fetch_ent(hv, tag, TRUE, 0);
+
+    SV *val = HeVAL(he);
+    if (!SvOK(val))
+        sv_set_true(val);
+}
+
+static void merge_tags_unique_hash(pTHX_ SV *src_tags, pTHX_ SV *dst_tags)
+{
+    assert(VALID_HV_TAGS(ohv));
+    assert(VALID_HV_TAGS(nhv));
+
+    HV *src_hv = (HV *)src_tags;
+    HV *dst_hv = (HV *)dst_tags;
+
+    hv_iterinit(src_hv);
+
+    HE *src_he;
+    while (src_he = hv_iternext(src_hv)) {
+        SV **dst_valp = hv_fetch(dst_hv, HeKEY(src_he), HeKLEN(src_he), TRUE);
+        if (!SvOK(*dst_valp))
+            sv_set_true(*dst_valp);
+    }
+}
+
 /*** FORWARD DECLARATIONS FOR MAGIC HANDLING ***/
 #define get_value_tags_magic(vt_type, sv)  S_get_value_tags_magic(aTHX_ vt_type, sv)
 static MAGIC *S_get_value_tags_magic(pTHX_ SV *vt_type, SV *sv);
@@ -310,6 +342,14 @@ static const struct ValueTagsBehavior behaviors[] = {
         .make_retval = &make_hash_retval,
         .add_tag     = &add_tag_hash_count,
         .merge_tags  = &merge_tags_hash_count,
+    },
+    [BEHAVIOR_UNIQUE_HASH] = {
+        .make_tags   = &make_hash_value_tags,
+        .dup_tags    = &dup_hash_value_tags,
+        .free_tags   = &free_value_tags,
+        .make_retval = &make_hash_retval,
+        .add_tag     = &add_tag_unique_hash,
+        .merge_tags  = &merge_tags_unique_hash,
     },
 };
 
@@ -468,10 +508,16 @@ SVTAGS_APPEND_ARRAY()
   OUTPUT:
     RETVAL
 
-int
-SVTAGS_HASH_COUNT()
+int SVTAGS_HASH_COUNT()
   CODE:
     RETVAL = BEHAVIOR_HASH_COUNT;
+  OUTPUT:
+    RETVAL
+
+int
+SVTAGS_UNIQUE_HASH()
+  CODE:
+    RETVAL = BEHAVIOR_UNIQUE_HASH;
   OUTPUT:
     RETVAL
 
