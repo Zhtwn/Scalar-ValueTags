@@ -32,270 +32,358 @@ our @EXPORT = qw(
 =cut
 
 1;
+__END__
 
 =head1 NAME
 
-C<Scalar::ValueTags> - Infectious magic data invisibly attached to variables
+C<Scalar::ValueTags> - Attach metadata to variable values
 
 =head1 SYNOPSIS
 
-FIXME - rewrite once new API is shaped
     use Scalar::ValueTags;
 
-    # apply hounding annotation to $foo
-    my $annotation = 'origin: somewhere';
-    my $foo        = 32;
-    hound_apply( \$foo, \$annotation );
+    # register value tags type with unique-hash behavior
+    my $vt_type = register_value_tags_type(SVTAGS_UNIQUE_HASH);
 
-    my @annotations = hound_query( \$foo );
-    # returns ['origin: somewhere']
+    # add value tag to $foo variable;
+    my $tag = 'origin: somewhere';
+    my $foo = 32;
+    add_value_tag( $vt_type, \$foo, $tag );
 
-    # annotations are propagated along with value
-    my $bar = $foo + 9;
+    my $tags = get_value_tags( $vt_type, \$foo );
+    # returns { 'origin: somewhere' => true }
 
-    my @annotations = hound_query( \$bar );
-    # returns ['origin: somewhere']
+    # value tags are propagated along with data value
+    my $bar = 10;
+    add_value_tags( $vt_type, \$bar, "origin: elsewhere" );
 
-    # delete all hounding annotations
-    hound_delete( \$foo ):
+    my $baz = $foo + $bar;
+
+    my $tags = get_value_tags( $vt_type, \$baz );
+    # returns { 'origin: elsewhere' => true, 'origin: somewhere' => true }
+
+    # delete all value tags
+    clear_value_tags( $vt_type, \$baz ):
+
+    my $tags = get_value_tags( $vt_type, \$baz );
+    # returns {}
 
 =head1 DESCRIPTION
 
-FIXME - rewrite once new API is shaped
+The C<Scalar::ValueTags> module provides functions for managing "value
+tags": metadata that is set on a data value and propagated from that
+variable to any other variable whose value is set from that of the
+tagged variable.
 
-The C<Scalar::ValueTags> module provides functions for managing hounding
-annotations to variables.
+=head2 Overview
 
-A "hounding annotation" is a metadata string describing the value of
-a variable. The initial use case is to generate real-time data lineage
-records that indicate all of the input sources used to derive an output
-value.
+This module is similar to L<Variable::Magic>, but applies metadata onto
+the data value contained within the variable rather than to the variable
+itself.
 
-Every time a value is assigned to a variable, all of the hounding
-annotations from all input variables are copied to the derived variable.
-This allows tracing the lineage of all data within a system by applying
-hounding when data is received from an external source, and reporting
-the hounding annotations when data is sent to an external destination.
+Every time a value is assigned to another variable, all of the value
+tags from all input variables are merged into the derived variable.
 
-The hounding annotations are handled as a logical set: annotations are
-de-duplicated as they are added to a variable's hounding. Thus, the
-hounding annotations are unordered.
+There are multiple L</Behaviors>, each of which defines what data types
+can be used as a value tag, and how the value tags are merged into the
+derived variables.
 
-This module exports the C<hound_apply>, C<hound_query>, and
-C<hound_delete> functions, as well as the C<IS_HOUNDING_ENABLED>
-constant.
+=head2 Typical Usage
 
-The propagation of the annotations is done by using the Value Magic
-feature that is being added to core Perl as part of Magic V2. By using
-Value Magic's C<infect> callback, C<Scalar::ValueTags> combines all of
-the unique hounding annotations from all of the source variables, and
-attaches them to the destination variable.
+Typically, a value tag contains either an indication of the source of
+the data or an indication of what operations are allowed or denied on
+the data.
 
-This module is similar to L<Variable::Magic>, but with some key
-differences. Notably, while most magic applies to variables and remains
-with a variable regardless of what value it currently stores, the
-annotations applied by this module are associated with the value itself,
-regardless of what variable currently stores it.
+If the value tags are set whenever data is received from an external
+source, then the value tags represent the flow of the data within the
+system. When the data is sent to an external destination, the value tags
+on that data can be used to report the data flow or to apply access
+control logic that depends on the source of the data.
+
+=head2 Perl Requirements
+
+C<Scalar::ValueTags> depends on the scalar value magic that is being
+added to the Perl core as part of Magic v2.
+
+=head2 Value Tags Types
+
+Each client must register with C<Scalar::ValueTags>, specifying the
+desired Behavior. Registering will return a unique opaque token that is
+then used in all functions that access value tags. The access functions
+will only see the value tags that were set using the same Value Tags
+Type.
+
+    my $vt_type = register_value_tags_type(SVTAGS_UNIQUE_REF_ARRAY);
+
+=head2 Behaviors
+
+A C<ValueTags> Behavior defines the data structure used to store the
+value tags and the process used to merge the value tags from multiple
+variables. The desired Behavior must be specified when registering a
+Value Tags Type.
+
+There are four Behaviors available from C<Scalar::ValueTags>:
+
+=head3 SVTAGS_UNIQUE_HASH
+
+This behavior uses a hash to track each unique string tag that has been
+seen. All value tags must be strings. The value tags are stored in a
+hash, with the tags as keys and C<true> as the value.
+
+When merging value tags, all tags that were set in any of the source
+variables will be set in the destination variable.
+
+=head3 SVTAGS_HASH_COUNT
+
+This behavior uses a hash to track the number of times each string tag
+has been seen. All value tags must be strings. The value tags are stored
+in a hash, with the tags as keys and the number of times that tag has
+been set as the value.
+
+When merging value tags, the tag counts from the tags of all source
+variables will be summed into the corresponding hash entries in the
+destination variable.
+
+=head3 SVTAGS_APPEND_ARRAY
+
+This behavior uses an array to track all tags that were seen. A value
+tag may be any Perl variable, either scalar or reference. The value tags
+are stored in an array, and new tags are appended onto the end of the
+array.
+
+When merging value tags, the tags of all source variables will be
+appended into the tags in the destination variable. The ordering of the
+appended array is not deterministic.
+
+=head3 SVTAGS_UNIQUE_REF_ARRAY
+
+This behavior uses an array to track the unique reference address of all
+tags that were seen. A value tag must be a Perl reference to either
+an array or a hash. The value tags are handled as a logical set,
+de-duplicated by the reference address of each tag.
+
+When merging value tags, the destination variable receives all unique
+reference addresses from the tags of all source variables.
+
+=head2 Guidelines
+
+=head3 Behavior Choice
+
+
+=over
+
+=item * SVTAGS_UNIQUE_HASH
+
+This behavior has the best merging, and only strings can be used as
+value tags.
+
+Structured data can be serialized into the string value tags, if needed.
+The serialization must be canonical, so that there is a unique string
+representation for any given data structure.
+
+    add_value_tags( $vt_type, \$var, encode_json( { ... } ) );
+
+Since the tags are stored as hash keys, identical tags share the same memory.
+
+Use this behavior if you have string or serializable tags, and you only
+need to know which tags have been seen in the dataflow.
+
+=item * SVTAGS_HASH_COUNT
+
+This behavior has slightly lower merging performance than
+C<SVTAGS_UNIQUE_HASH>, and only strings can be used as value tags.
+
+Structured data can be serialized into the string value tags, if needed.
+The serialization must be canonical, so that there is a unique string
+representation for any given data structure.
+
+    add_value_tags( $vt_type, \$var, encode_json( { ... } ) );
+
+Since the tags are stored as hash keys, identical tags share the same memory.
+
+Use this behavior if you have string or serializable tags, and you need
+to know how many times each tag has been seen in the dataflow.
+
+=item * SVTAGS_APPEND_ARRAY
+
+This behavior has similar merging performance to C<SVTAGS_UNIQUE_HASH>,
+but allows any Perl scalar, arrayref, or hashref to be used as value
+tags.
+
+Since the tags are simply appended to an array, the size of the value
+tags structure increases every time a new value is derived from multiple
+tagged values.
+
+Use this behavior if you have arbitrary data structures as tags, but the
+code using the tagged values rarely combines tagged values.
+
+=item * SVTAGS_UNIQUE_REF_ARRAY
+
+This behavior has lower performance than C<SVTAGS_HASH_COUNT> and
+C<SVTAGS_APPEND_ARRAY>, because it does a linear scan of all existing
+tags when merging tags from multiple value.
+
+Since the value tags are de-duplicated by the reference address when
+merging, the size of the value tags structure depends on the number of
+unique value tags that have been merged.
+
+Use this behavior if you have structured data for tags and adding new
+tags with C<add_value_tags> is done often, since there is no additional
+serialization cost (unlike SVTAGS_UNIQUE_HASH), but there is additional
+merging cost.
+
+=back
+
+=head2 Implementation
+
+Value tags are implemented using the Value Magic feature that is being
+added to core Perl as part of Magic V2. By using Value Magic's C<infect>
+callback, all of the value tags from all of the source variables are
+merged into the destination variable, as defined by the chosen behavior.
+
+See C<ScalarValueMagicFunctions> in L</perlapi> for more details on
+scalar value magic in core Perl.
+
+Basically,
 
 =over 4
 
-=item * Value magic is copied on assignment
+=item * Scalar value magic is added to a variable when a value tag is added
 
-When values are copied through the assignment operator, or implictly by
-operations such as storing and retriving values in arrays and hashes, or
-passing or returning values to subroutines.
+    add_value_tags( $vt_type, \$var, 'foo' );
 
-    my $foo = $hounded_variable;
-    # $foo now has the same hounding annotations
+=item * Value tags are duplicated upon assignment from a tagged value
 
-    func($hounded_variable);
-    sub func($x) {
-        # $x will be similarly annotated
+    add_value_tags( $vt_type, \$foo, 'foo' );
+    $bar = $foo;
+    # $bar now has the same 'foo' tag as $foo
+
+=item * Value tags are merged when multiple source values are combined
+
+    $foo = 3;
+    add_value_tags( $vt_type, \$foo, 'foo' );
+    $bar = 5;
+    add_value_tags( $vt_type, \$bar, 'bar' );
+    $foo += $bar;
+    # $foo now has both 'foo' and 'bar' tags
+
+=item * Existing value tags are removed when value is overwritten
+
+    $foo = 1;
+    add_value_tags( $vt_type, \$foo, 'foo' );
+    $bar = 5;
+    add_value_tags( $vt_type, \$bar, 'bar' );
+    $foo = $bar;
+    # $foo now has only the 'bar' tag
+
+=item * Value tags are removed when the value is set to C<undef>
+
+    $foo = 1;
+    add_value_tags( $vt_type, \$foo, 'foo' );
+    undef $foo;
+    # $foo now has no tags
+
+=item * Value tags on source string are preserved through regexps
+
+    $foo = 'this is';
+    add_value_tags( $vt_type, \$foo, 'foo' );
+    ($bar) = $foo =~ m/is/;
+    # $bar now has the 'foo' tag
+
+=item * Hash keys cannot contain value tags
+
+    $foo = 'foo';
+    add_value_tags( $vt_type, \$foo, 'foo' );
+    %bar = ( $foo => 8 );
+    for my $key ( keys %bar ) {
+        # $key has no value tags
     }
-
-=item * Value magic is combined through calculations
-
-If you have one or more values with hounding data in an expression, the result
-will have the combined hounding data of all the hounded variables.
-
-    # $foo will have combined hounding data from $hounded_variable and
-    # $hounded_variable2
-    my $foo = $hounded_variable + $x + $hounded_variable2;
-
-=item * Value magic is lost when values are overwritten
-
-When a new value is written into a variable currently containing a hounded
-value, if that new value does not have any hounding annotations then the
-variable no longer appears to contain such annotations.
-
-    my $foo = $hounded_value;
-    $foo = "a program constant";
-
-    # $foo no longer has any hounding annotations
 
 =back
 
 =head1 FUNCTIONS
 
-=head2 hound_apply
+=head2 value_tags_enabled
 
-    my $var = 42;
-    hound_apply( \$var, [ 123 ] );
-    print $var; # 42
-    my @result = hound_query( \$var );
-    print @result; # ARRAY(0x...)
-
-The C<hound_apply> function invisibly applies hounding data to a variable via
-magic. The first argument is a reference to the variable, and the second
-argument is the hounding data. Hounding data must be references; non-reference
-scalars are not permitted.
-
-Subsequent calls to C<hound_apply> on the same variable will append the
-hounding data to the variable.
-
-At the present time, hounding may be applied to scalar, array, and hash
-references.
-
-=head2 hound_query
-
-    my @result = hound_query( \$var );
-
-    my $count = hound_query( \$var );
-
-The C<hound_query> function queries the hounding data of a variable. The
-argument is a reference to the variable. It returns the hounding data of the
-variable.
-
-In scalar context, it returns the number of hounding data items attached to
-the data, or C<undef> if the variable is not hounded.
-
-=head2 hound_delete
-
-    hound_delete( \$var );
-
-The C<hound_delete> function deletes the hounding behavior on the data.
-
-=head2 IS_HOUNDING_ENABLED
-
-    if ( IS_HOUNDING_ENABLED ) {
-        say "Hounding is enabled!";
+    if ( value_tags_enabled() ) {
+        say "Value tags are enabled!";
     }
 
 This constant is automatically exported into your namespace. It is true if the
-module is able to apply and query hounding data, and false otherwise.
+module is able to manage value tags, and false if not.
 
-=head1 BEHAVIOR
+FIXME: Module needs to throw exception if value tags are not available and loaded,
+rather than requiring client to check whether they are enabled.
 
-This module grew out of a client's need for L<data
-lineage|https://en.wikipedia.org/wiki/Data_lineage> tracking, but it can be
-used for many other cases. It allows you to invisibly attach data to other
-data without changing any code. This can be useful for debugging, logging, or
-similar things. Note that the behavior of the variable is not changed! Also,
-if you apply a reference as the hounding data (the second argument to
-C<hound_apply>), the reference is I<not> applied if the same reference as the
-previous reference.
+=head2 add_value_tag
 
-    my $var = 42;
-    hound_apply( \$var1, 123 );
-    say $var; # 42
-    my @result = hound_query( \$var );
-    say @result; # 123
-    hound_apply( \$var, { foo => 456 } );
-    @result = hound_query( \$var );
-    say @result; # 123, { foo => 456 }
+C<add_value_tag( $vt_type, \$var, $tag > adds the given tag to the value tags
+for the specified value-tags type.
 
-    hound_apply( \$var, { foo => 456 } );
-    @result = hound_query( \$var );
-    say @result; # 123, { foo => 456 }
+C<$vt_type> must be the value returned from a L</register_value_tags_type> call.
 
-=head1 CORE IMPLEMENTATIONS
+The variable must always be passed as a reference, since C<add_value_tag> needs
+to modify the SV* directly.
 
-=head2 USERTAINT
+The C<$tag> must be compatible with the registered behavior.
 
-Originally, C<Scalar::ValueTags> was developed on top of the C<USERTAINT> core
-patches, which leveraged the Perl C<taint> behavior to add and propagate
-hounding annotations on variables. This was a proof-of-concept core
-implementation that provided the needed behavior in an I<ad hoc> manner.
-The C<USERTAINT> implementation includes quite a bit of workaround
-code that handles special cases that could not be done directly with
-C<taint>. Some of these workarounds needed to be implemented in
-C<Scalar::ValueTags> so that the Perl operator overloads would happen
-at the correct time.
+    # using SVTAGS_UNIQUE_HASH or SVTAGS_HASH_COUNT
+    my $var;
+    add_value_tag( $vt_type, \$var, 'my tag' ); # tag must be string
+    my $tags = get_value_tags( $vt_type, \$var );
+    #  returns { 'my tag' => true }
 
-=head2 Hooks / Magic v2
+    # using SVTAGS_UNIQUE_REF_ARRAY
+    my $var;
+    add_value_tag( $vt_type, \$var, [ 123 ] );  # tag must be ref
+    my $tags = get_value_tags( $vt_type, \$var );
+    #  returns [ [ 123 ] ]
 
-In 2025, the Perl core implementation of C<Magic v2> was developed. which
-extends Perl's C<magic> with a number of new features. One of the features
-is C<Value Magic>, which provides a much simpler way to propagate hounding
-annotations. With C<Magic v2>, all of the propagation logic is done and
-tested in the Perl core.
+    # using SVTAGS_APPEND_ARRAY
+    my $var;
+    add_value_tag( $vt_type, \$var, 'my tag' );  # tag may be ref or string
+    my $tags = get_value_tags( $vt_type, \$var );
+    # returns  [ 'my tag' ]
 
-=head2 Transition
+=head2 get_value_tags
 
-Currently, C<Scalar::ValueTags> detects whether the C<Magic v2> or
-C<USERTAINT> implementation is available in Perl core, and uses that.
+The C<get_value_tags> function returns the value tags of the given C<$vt_type>
+that are currently attached to the variable's data.
 
-This allows the same C<Scalar::ValueTags> code to be used for testing
-C<Bookings::Data::Lineage> code on a C<USERTANT>-patched Perl 5.36.0.
-When the C<Magic v2> feature is merged into a future version of Perl
-and Booking is using that Perl version, then C<Scalar::ValueTags> and
-all of the C<Bookings::Data::Lineage> code will continue to behave
-in the same manner (modulo any bugs in the POC C<USERTAINT> code).
+The variable must always be passed as a reference, since C<add_value_tag> needs
+to inspect the SV* directly.
 
-To ensure that C<Scalar::ValueTags> works the same on both C<USERTAINT>
-and C<Magic v2>, the differences between implementations have been
-isolated into four low-level functions: C<get_hounding_magic>,
-C<add_hounding_magic>, C<remove_hounding_magic>, and C<get_hounding_av>.
-Other than the additional Perl operator overrides specific to C<USERTAINT>,
-the rest of the C<Scalar::ValueTags> code is shared between the two core
-implementations.
+The returned value tags structure depends on the registered behavior. Array
+behaviors return an array reference, while hash behaviors return a hash reference.
+
+    my $tags = get_value_tags( $vt_type, \$var );
+
+=head2 clear_value_tags
+
+The C<clear_value_tags> function removes all value tags of the given C<$vt_type>
+from the variable's data.
+
+The variable must always be passed as a reference, since C<add_value_tag> needs
+to modify the SV* directly.
+
+    clear_value_tags( $vt_type, \$var );
 
 =head1 DEBUGGING
+
+FIXME - Debugging is not yet implemented in C<Scalar::ValueTags>.
 
 =head2 Devel::MAT::Dumper
 
 If C<Devel::MAT::Dumper> is installed, then C<Scalar::ValueTags> will add any
-hounding annotations to the dumped data.
+value tags to the dumped data.
 
 See C<HAVE_DMD_HELPER> in the XS code.
 
 =head2 DEBUG_TRACE_ANNOTATIONS
 
 If C<Scalar::ValueTags> is configured with the C<--with-trace> option, then
-additional Perl magic is added to each of the hounding annotations indicating
+additional Perl magic is added to each of the value tags indicating
 the source code origin of that annotation.
 
 To enable this, use C<perl Build.PL --with-trace>.
 
-=head2 USERTAINT debugging
-
-Any of the Perl operations that are overridden by C<Scalar::ValueTags> when
-using the C<USERTAINT> application can be disabled by setting an environment
-variable. This is primarily useful for debugging the portion of C<USERTAINT>
-implemented in C<Scalar::ValueTags>, and is not likely to be very helpful
-otherwise.
-
-To disable these Perl operation overrides, set a C<PERL_DATA_HOUNDING_DISABLE>
-environment variable to a comma-separated list of any of the flag names listed
-below. Each included flag will disable the Perl operation overriding for that
-specific operation.
-
-The flag names are:
-
-=over 4
-
-=item B<match>
-
-The special code around C<m/.../> regexp match operations that is responsible
-for setting up the C<$1>, C<$2> etc variables.
-
-=item B<subst>
-
-The special code around C<s/.../.../> regexp substitution operations that sets
-up C<$1> etc and also handles hounded expressions in the replacement.
-
-=back
-
-For example:
-
-    $ PERL_DATA_HOUNDING_DISABLE=match perl -MScalar::ValueTags ...
