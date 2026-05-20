@@ -75,7 +75,6 @@ struct ValueTagsSpec {
 
 static void av_append_tag(pTHX_ AV *av, SV *tag, bool check_uniq)
 {
-    assert(VALID_AV_TAGS(sav));
     assert(SvROK(tag));
 
     if (check_uniq) {
