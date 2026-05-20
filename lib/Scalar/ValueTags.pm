@@ -17,20 +17,6 @@ our @EXPORT = qw(
     get_value_tags
 );
 
-=for development
-
-# Test if the module is actually working
-{
-    hound_apply( \my $var1, \123 );
-    my $var2 = $var1; # this only copies the hounding if perl core supports it
-
-    # Export a constant to say if this works
-    *IS_HOUNDING_ENABLED = scalar(hound_query( \$var2 )) ? sub () { !!1 } : sub () { !!0 };
-    *IS_HOUNDING_TRACING_ENABLED = scalar(hound_tracing_enabled()) ? sub () { !!1 } : sub () { !!0 };
-}
-
-=cut
-
 1;
 
 =head1 NAME
