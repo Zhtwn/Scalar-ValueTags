@@ -86,4 +86,49 @@ my $vt_type;
         'after second tag_two added, get_value_tags should return tag_one and tag_two' );
 }
 
+# removing value tags
+{
+    my $tag_one   = 'one';
+    my $tag_two   = 'two';
+    my $tag_three = 'three';
+
+    # add each tag that number of times
+    my $var = 123;
+    add_value_tag( $vt_type, \$var, $tag_one );
+    add_value_tag( $vt_type, \$var, $tag_two );
+    add_value_tag( $vt_type, \$var, $tag_three );
+
+    is( get_value_tags( $vt_type, \$var ), { $tag_one => 1, $tag_two => 1, $tag_three => 1 },
+        'SETUP: get_value_tags should return all three tags' );
+
+    remove_value_tag( $vt_type, \$var, $tag_one );
+
+    is( get_value_tags( $vt_type, \$var ), { $tag_two => 1, $tag_three => 1 },
+        'after tag_one removed, get_value_tags should return tag_two and tag_three' );
+
+    remove_value_tag( $vt_type, \$var, $tag_three );
+
+    is( get_value_tags( $vt_type, \$var ), { $tag_two => 1 },
+        'after tag_three removed, get_value_tags should return tag_two' );
+
+    # remove all remaining tags
+    remove_value_tag( $vt_type, \$var, $tag_two );
+
+    is( get_value_tags( $vt_type, \$var ), {},
+        'after final tag_two removed, get_value_tags should return no tags' );
+
+    # remove nonexistent tag
+    remove_value_tag( $vt_type, \$var, $tag_one );
+
+    is( get_value_tags( $vt_type, \$var ), {},
+        'after nonexistent tag removed, get_value_tags should return empty hash' );
+
+    # remove tag from untagged var
+    my $untagged_var = 9;
+    remove_value_tag( $vt_type, \$untagged_var, $tag_one );
+
+    is( get_value_tags( $vt_type, \$untagged_var ), {},
+        'after tag removed from untagged variable, get_value_tags should return empty hash' );
+}
+
 done_testing;
