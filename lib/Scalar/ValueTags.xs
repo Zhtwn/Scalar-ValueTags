@@ -139,11 +139,12 @@ static void merge_tags_append_array (pTHX_ SV *src_tags, SV *dst_tags)
     }
 }
 
-static void hv_inc_val (pTHX_ SV *tags, SV *tag, Size_t count)
+static void add_tag_hash_count(pTHX_ SV *tags, SV *tag)
 {
     assert(VALID_HV_TAGS(tags));
     assert(tag);
 
+    ENTER_DISARM_INFECT;    // avoid PL_viralmagic_annotations copying of magic
     HV *hv = (HV *)tags;
     HE *he = hv_fetch_ent(hv, tag, FALSE, 0);
 
@@ -154,15 +155,6 @@ static void hv_inc_val (pTHX_ SV *tags, SV *tag, Size_t count)
     else {
         hv_store_ent(hv, tag, newSViv(count), 0);
     }
-}
-
-static void add_tag_hash_count(pTHX_ SV *tags, SV *tag)
-{
-    assert(VALID_HV_TAGS(tags));
-    assert(tag);
-
-    ENTER_DISARM_INFECT;    // avoid PL_viralmagic_annotations copying of magic
-    hv_inc_val(tags, tag, 1);
     LEAVE_DISARM_INFECT;
 }
 
