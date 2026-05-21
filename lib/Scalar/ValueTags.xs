@@ -46,12 +46,12 @@ struct ValueTagsUserStruct {
 
 struct ValueTagsBehavior {
     SV*  (*make_tags)(pTHX);
-    SV*  (*dup_tags)(pTHX_ SV *tags);
+    SV*  (*dup_tags)(pTHX_ const SV* const tags);
     void (*free_tags)(pTHX_ SV *sv, MAGIC *mg);   // FIXME: needed?
     void (*add_tag)(pTHX_ SV *tags, SV *tag);
     void (*remove_tag)(pTHX_ SV *tags, SV *tag);
     void (*merge_tags)(pTHX_ SV *src_tags, SV *dst_tags);
-    SV*  (*make_retval)(pTHX_ MAGIC *mg);
+    SV*  (*make_retval)(pTHX_ const MAGIC* const mg);
 };
 
 struct ValueTagsSpec {
@@ -68,13 +68,13 @@ struct ValueTagsSpec {
 
 /*** UTILTIIES ***/
 
-static void av_append_tag(pTHX_ AV *av, SV *tag, bool check_uniq)
+static void av_append_tag(pTHX_ AV *av, SV* const tag, const bool check_uniq)
 {
     assert(SvROK(tag));
 
     if (check_uniq) {
-        SV **svp = AvARRAY(av);
-        Size_t count = av_count(av);
+        SV** const svp = AvARRAY(av);
+        const Size_t count = av_count(av);
         for(U32 idx = 0; idx < count; idx++) {
             // Skip duplicates
             if(SvROK(svp[idx]) && SvRV(tag) == SvRV(svp[idx])) {
@@ -83,11 +83,11 @@ static void av_append_tag(pTHX_ AV *av, SV *tag, bool check_uniq)
         }
     }
 
-    SV *ret = newSVsv(tag);
+    SV* const ret = newSVsv(tag);
     av_push_simple(av, ret);
 }
 
-static void add_tag_unique_ref_array (pTHX_ SV *tags, SV *tag)
+static void add_tag_unique_ref_array (pTHX_ SV*tags, SV *tag)
 {
     assert(VALID_AV_TAGS(tags));
     assert(SvROK(tag));
@@ -122,11 +122,11 @@ static void merge_tags_unique_ref_array (pTHX_ SV *src_tags, SV *dst_tags)
     assert(VALID_AV_TAGS(dst_tags));
 
     // no need to check uniqueness if destination has no tags
-    bool check_uniq = av_count((AV *)dst_tags);
+    const bool check_uniq = av_count((AV *)dst_tags);
 
-    AV *src_av = (AV *)src_tags;
-    SV **svp = AvARRAY(src_av);
-    Size_t count = av_count(src_av);
+    AV* const src_av = (AV *)src_tags;
+    SV** const svp = AvARRAY(src_av);
+    const Size_t count = av_count(src_av);
     for (U32 idx = 0; idx < count; idx++) {
         av_append_tag(aTHX_ (AV *)dst_tags, svp[idx], check_uniq);
     }
@@ -313,12 +313,12 @@ static SV *make_hash_value_tags(pTHX)
     return (SV *)newHV();
 }
 
-static SV *dup_array_value_tags(pTHX_ SV *value_tags)
+static SV *dup_array_value_tags(pTHX_ const SV* const value_tags)
 {
     return (SV *)newAVav((AV *)value_tags);
 }
 
-static SV *dup_hash_value_tags(pTHX_ SV *value_tags)
+static SV *dup_hash_value_tags(pTHX_ const SV* const value_tags)
 {
     return (SV *)newHVhv((HV *)value_tags);
 }
@@ -334,7 +334,7 @@ static void free_value_tags(pTHX_ SV *sv, MAGIC *mg)
     }
 }
 
-static SV *make_array_retval(pTHX_ MAGIC *mg)
+static SV *make_array_retval(pTHX_ const MAGIC* const mg)
 {
     assert(mg);
     SV *vt = VALUETAGS(mg);
@@ -345,7 +345,7 @@ static SV *make_array_retval(pTHX_ MAGIC *mg)
     return newRV((SV *)results);
 }
 
-static SV *make_hash_retval(pTHX_ MAGIC *mg)
+static SV *make_hash_retval(pTHX_ const MAGIC* const mg)
 {
     assert(mg);
 
