@@ -16,9 +16,8 @@ my $build = Module::Build->new(
         'perl' => '5.028',
     },
     test_requires => {
-        'Feature::Compat::Try' => 0,
-        'List::Util::PP'       => 0,
-        'Test2::V0'            => 0,
+        'List::Util::PP' => 0,
+        'Test2::V0'      => 0,
     },
     extra_compiler_flags =>
       [ $with_trace ? ("-DDEBUG_TRACE_ANNOTATIONS") : (), ],
