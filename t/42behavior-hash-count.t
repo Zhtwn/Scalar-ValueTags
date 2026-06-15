@@ -28,6 +28,7 @@ my $vt_type;
 
     my $in_order = $var_one + $var_two;
 
+    is( $in_order, 123 + 456, 'new variable should have sum of others' );
     is( get_value_tags( $vt_type, \$in_order ), {$tag => 1},
         'get_value_tags should return initial tag when tag is on first variable' );
 
@@ -54,6 +55,7 @@ my $vt_type;
 
     my $combined = $var_one + $var_two;
 
+    is( $combined, 123 + 456, 'new variable should have sum of others' );
     is( get_value_tags( $vt_type, \$combined ), {$tag_one => 1, $tag_two => 1},
         'get_value_tags should return both tags' );
 }
