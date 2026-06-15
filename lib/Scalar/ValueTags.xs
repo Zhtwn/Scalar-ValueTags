@@ -150,10 +150,10 @@ static void add_tag_hash_count(pTHX_ SV *tags, SV *tag)
 
     if (he) {
         SV *val = HeVAL(he);
-        SvIV_set(val, SvIV(val) + count);
+        SvIV_set(val, SvIV(val) + 1);
     }
     else {
-        hv_store_ent(hv, tag, newSViv(count), 0);
+        hv_store_ent(hv, tag, newSViv(1), 0);
     }
     LEAVE_DISARM_INFECT;
 }
