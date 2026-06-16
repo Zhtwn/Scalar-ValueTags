@@ -146,15 +146,14 @@ static void add_tag_hash_count(pTHX_ SV *tags, SV *tag)
 
     ENTER_DISARM_INFECT;    // avoid PL_viralmagic_annotations copying of magic
     HV *hv = (HV *)tags;
-    HE *he = hv_fetch_ent(hv, tag, FALSE, 0);
+    HE *he = hv_fetch_ent(hv, tag, TRUE, 0);
+    SV *val = HeVAL(he);
 
-    if (he) {
-        SV *val = HeVAL(he);
-        SvIV_set(val, SvIV(val) + 1);
-    }
-    else {
-        hv_store_ent(hv, tag, newSViv(1), 0);
-    }
+    IV new_val = 1;
+    if (SvOK(val))
+        new_val += SvIV(val);
+
+    sv_setiv(val, new_val);
     LEAVE_DISARM_INFECT;
 }
 
