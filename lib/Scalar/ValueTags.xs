@@ -9,18 +9,6 @@
 #  include "DMD_helper.h"
 #endif
 
-/* Back-compat for older perls
- * ---------------------------
- */
-
-#ifndef av_push_simple
-#  define av_push_simple(av, sv)  av_push(av, sv)
-#endif
-
-#ifndef av_count
-#  define av_count(av) (AvFILL(av)+1)
-#endif
-
 #if defined(sv_magicv2_add)
 #  define HAVE_VALUE_MAGIC
 #endif
