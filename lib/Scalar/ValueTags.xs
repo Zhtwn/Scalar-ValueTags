@@ -170,12 +170,12 @@ static void merge_tags_hash_count(pTHX_ SV *src_tags, pTHX_ SV *dst_tags)
     HE *src_he;
     ENTER_DISARM_INFECT;    // avoid PL_viralmagic_annotations copying of magic on hash values
     while (src_he = hv_iternext(src_hv)) {
-        SV *src_val = HeVAL(src_he);
-        SV **dst_valp = hv_fetch(dst_hv, HeKEY(src_he), HeKLEN(src_he), 0);
-        if (dst_valp && *dst_valp)
-            sv_setiv(*dst_valp, SvIV(src_val) + SvIV(*dst_valp));
-        else
-            hv_store(dst_hv, HeKEY(src_he), HeKLEN(src_he), newSVsv(src_val), HeHASH(src_he));
+        IV new_val = SvIV(HeVAL(src_he));
+        SV **dst_valp = hv_fetch(dst_hv, HeKEY(src_he), HeKLEN(src_he), TRUE);
+        if (dst_valp && *dst_valp && SvIOK(*dst_valp))
+            new_val += SvIV(*dst_valp);
+
+        sv_setiv(*dst_valp, new_val);
     }
     LEAVE_DISARM_INFECT;
 }
