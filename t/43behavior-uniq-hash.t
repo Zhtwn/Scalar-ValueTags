@@ -8,7 +8,7 @@ skip_all "Scalar::ValueTags is not enabled" unless value_tags_enabled;
 # use same ScalarValueTags type for all tests
 my $vt_type;
 {
-    $vt_type = register_value_tags_type(SVTAGS_HASH_COUNT);
+    $vt_type = register_value_tags_type(SVTAGS_UNIQUE_HASH);
     ok( $vt_type, 'register_value_tags_type');
 }
 
@@ -28,7 +28,6 @@ my $vt_type;
 
     my $in_order = $var_one + $var_two;
 
-    is( $in_order, 123 + 456, 'new variable should have sum of others' );
     is( get_value_tags( $vt_type, \$in_order ), {$tag => 1},
         'get_value_tags should return initial tag when tag is on first variable' );
 
@@ -55,7 +54,6 @@ my $vt_type;
 
     my $combined = $var_one + $var_two;
 
-    is( $combined, 123 + 456, 'new variable should have sum of others' );
     is( get_value_tags( $vt_type, \$combined ), {$tag_one => 1, $tag_two => 1},
         'get_value_tags should return both tags' );
 }
@@ -69,23 +67,23 @@ my $vt_type;
     add_value_tag( $vt_type, \$var, $tag_one );
 
     is( get_value_tags( $vt_type, \$var ), {$tag_one => 1},
-        'after first tag_one added, get_value_tags should return one count of tag_one' );
+        'after first tag_one added, get_value_tags should return tag_one' );
 
     add_value_tag( $vt_type, \$var, $tag_one );
 
-    is( get_value_tags( $vt_type, \$var ), {$tag_one => 2},
-        'after second tag_one added, get_value_tags should return two counts of tag_one' );
+    is( get_value_tags( $vt_type, \$var ), {$tag_one => 1},
+        'after second tag_one added, get_value_tags should return tag_one' );
 
     add_value_tag( $vt_type, \$var, $tag_two );
 
     # FIXME: is tag order deterministic in implementation?
-    is( get_value_tags( $vt_type, \$var ), { $tag_one => 2, $tag_two => 1 },
-        'after first tag_two added, get_value_tags should return two counts of tag_one and one of tag_two' );
+    is( get_value_tags( $vt_type, \$var ), { $tag_one => 1, $tag_two => 1 },
+        'after first tag_two added, get_value_tags should return tag_one and tag_two' );
 
     add_value_tag( $vt_type, \$var, $tag_two );
 
-    is( get_value_tags( $vt_type, \$var ), { $tag_one => 2, $tag_two => 2 },
-        'after second tag_two added, get_value_tags should return two counts of both tag_one and tag_two' );
+    is( get_value_tags( $vt_type, \$var ), { $tag_one => 1, $tag_two => 1 },
+        'after second tag_two added, get_value_tags should return tag_one and tag_two' );
 }
 
 # removing value tags
@@ -98,33 +96,26 @@ my $vt_type;
     my $var = 123;
     add_value_tag( $vt_type, \$var, $tag_one );
     add_value_tag( $vt_type, \$var, $tag_two );
-    add_value_tag( $vt_type, \$var, $tag_two );
-    add_value_tag( $vt_type, \$var, $tag_three );
-    add_value_tag( $vt_type, \$var, $tag_three );
     add_value_tag( $vt_type, \$var, $tag_three );
 
-    is( get_value_tags( $vt_type, \$var ), { $tag_one => 1, $tag_two => 2, $tag_three => 3 },
-        'SETUP: get_value_tags should return correct counts for all three tags' );
+    is( get_value_tags( $vt_type, \$var ), { $tag_one => 1, $tag_two => 1, $tag_three => 1 },
+        'SETUP: get_value_tags should return all three tags' );
 
     remove_value_tag( $vt_type, \$var, $tag_one );
 
-    is( get_value_tags( $vt_type, \$var ), { $tag_two => 2, $tag_three => 3 },
-        'after one tag_one removed, get_value_tags should return tag_two = 2 and tag_three = 3' );
+    is( get_value_tags( $vt_type, \$var ), { $tag_two => 1, $tag_three => 1 },
+        'after tag_one removed, get_value_tags should return tag_two and tag_three' );
 
     remove_value_tag( $vt_type, \$var, $tag_three );
 
-    is( get_value_tags( $vt_type, \$var ), { $tag_two => 2, $tag_three => 2 },
-        'after one tag_three removed, get_value_tags should return tag_two = 2 and tag_three = 2' );
+    is( get_value_tags( $vt_type, \$var ), { $tag_two => 1 },
+        'after tag_three removed, get_value_tags should return tag_two' );
 
     # remove all remaining tags
     remove_value_tag( $vt_type, \$var, $tag_two );
-    remove_value_tag( $vt_type, \$var, $tag_two );
-    remove_value_tag( $vt_type, \$var, $tag_three );
-    remove_value_tag( $vt_type, \$var, $tag_three );
 
     is( get_value_tags( $vt_type, \$var ), {},
-        'after all remaining tags removed, get_value_tags should return no tags' );
+        'after final tag_two removed, get_value_tags should return no tags' );
 }
 
 done_testing;
-1;

@@ -9,18 +9,6 @@
 #  include "DMD_helper.h"
 #endif
 
-/* Back-compat for older perls
- * ---------------------------
- */
-
-#ifndef av_push_simple
-#  define av_push_simple(av, sv)  av_push(av, sv)
-#endif
-
-#ifndef av_count
-#  define av_count(av) (AvFILL(av)+1)
-#endif
-
 #if defined(sv_magicv2_add)
 #  define HAVE_VALUE_MAGIC
 #endif
@@ -31,6 +19,7 @@ enum behavior_types {
     BEHAVIOR_UNIQUE_REF_ARRAY,
     BEHAVIOR_APPEND_ARRAY,
     BEHAVIOR_HASH_COUNT,
+    BEHAVIOR_UNIQUE_HASH,
     MAX_BEHAVIOR
 };
 
@@ -42,6 +31,13 @@ enum behavior_types {
 #  define LEAVE_DISARM_INFECT \
   LEAVE
 
+typedef struct {
+    struct ValueTagsSpec *vt_specs;
+    struct ValueTagsSpec *final_vt_spec;
+} my_cxt_t;
+
+START_MY_CXT
+
 /*** Structs ***/
 
 struct ValueTagsUserStruct {
@@ -50,11 +46,12 @@ struct ValueTagsUserStruct {
 
 struct ValueTagsBehavior {
     SV*  (*make_tags)(pTHX);
-    SV*  (*dup_tags)(pTHX_ SV *tags);
+    SV*  (*dup_tags)(pTHX_ const SV* const tags);
     void (*free_tags)(pTHX_ SV *sv, MAGIC *mg);   // FIXME: needed?
     void (*add_tag)(pTHX_ SV *tags, SV *tag);
+    void (*remove_tag)(pTHX_ SV *tags, SV *tag);
     void (*merge_tags)(pTHX_ SV *src_tags, SV *dst_tags);
-    SV*  (*make_retval)(pTHX_ MAGIC *mg);
+    SV*  (*make_retval)(pTHX_ const MAGIC* const mg);
 };
 
 struct ValueTagsSpec {
@@ -71,14 +68,13 @@ struct ValueTagsSpec {
 
 /*** UTILTIIES ***/
 
-static void av_append_tag(pTHX_ AV *av, SV *tag, bool check_uniq)
+static void av_append_tag(pTHX_ AV *av, SV* const tag, const bool check_uniq)
 {
-    assert(VALID_AV_TAGS(sav));
     assert(SvROK(tag));
 
     if (check_uniq) {
-        SV **svp = AvARRAY(av);
-        Size_t count = av_count(av);
+        SV** const svp = AvARRAY(av);
+        const Size_t count = av_count(av);
         for(U32 idx = 0; idx < count; idx++) {
             // Skip duplicates
             if(SvROK(svp[idx]) && SvRV(tag) == SvRV(svp[idx])) {
@@ -87,11 +83,11 @@ static void av_append_tag(pTHX_ AV *av, SV *tag, bool check_uniq)
         }
     }
 
-    SV *ret = newSVsv(tag);
+    SV* const ret = newSVsv(tag);
     av_push_simple(av, ret);
 }
 
-static void add_tag_unique_ref_array (pTHX_ SV *tags, SV *tag)
+static void add_tag_unique_ref_array (pTHX_ SV*tags, SV *tag)
 {
     assert(VALID_AV_TAGS(tags));
     assert(SvROK(tag));
@@ -100,17 +96,37 @@ static void add_tag_unique_ref_array (pTHX_ SV *tags, SV *tag)
     av_append_tag(aTHX_ (AV *)tags, tag, true);
 }
 
+static void remove_tag_unique_ref_array (pTHX_ SV *tags, SV *tag)
+{
+    assert(VALID_AV_TAGS(tags));
+    assert(SvROK(tag));
+
+    AV *av = (AV *) tags;
+    SV **svp = AvARRAY(av);
+    SV **top = svp + AvFILL(av);
+    for (SV **cur = svp; cur <= top; cur++) {
+        if (SvROK(*cur) && SvRV(tag) == SvRV(*cur)) {
+            SvREFCNT_dec_NN(*cur);
+            Move(cur + 1, cur, top - cur, SV *);
+            *top = NULL;
+            top--;
+            AvFILLp(av)--;
+            break;
+        }
+    }
+}
+
 static void merge_tags_unique_ref_array (pTHX_ SV *src_tags, SV *dst_tags)
 {
     assert(VALID_AV_TAGS(src_tags));
     assert(VALID_AV_TAGS(dst_tags));
 
     // no need to check uniqueness if destination has no tags
-    bool check_uniq = av_count((AV *)dst_tags);
+    const bool check_uniq = av_count((AV *)dst_tags);
 
-    AV *src_av = (AV *)src_tags;
-    SV **svp = AvARRAY(src_av);
-    Size_t count = av_count(src_av);
+    AV* const src_av = (AV *)src_tags;
+    SV** const svp = AvARRAY(src_av);
+    const Size_t count = av_count(src_av);
     for (U32 idx = 0; idx < count; idx++) {
         av_append_tag(aTHX_ (AV *)dst_tags, svp[idx], check_uniq);
     }
@@ -123,6 +139,30 @@ static void add_tag_append_array (pTHX_ SV *tags, SV *tag)
 
     // never check_uniq
     av_append_tag(aTHX_ (AV *)tags, tag, false);
+}
+
+// removes all matching tags from array
+static void remove_tag_append_array (pTHX_ SV *tags, SV *tag)
+{
+    assert(VALID_AV_TAGS(tags));
+    assert(SvROK(tag));
+
+    AV *av = (AV *) tags;
+    SV **svp = AvARRAY(av);
+    SV **top = svp + AvFILL(av);
+    SV **cur = svp;
+    while (cur <= top) {
+        if (SvROK(*cur) && SvRV(tag) == SvRV(*cur)) {
+            SvREFCNT_dec_NN(*cur);
+            Move(cur + 1, cur, top - cur, SV *);
+            *top = NULL;
+            top--;
+            AvFILLp(av)--;
+        }
+        else {
+            cur++;
+        }
+    }
 }
 
 static void merge_tags_append_array (pTHX_ SV *src_tags, SV *dst_tags)
@@ -146,16 +186,36 @@ static void add_tag_hash_count(pTHX_ SV *tags, SV *tag)
 
     ENTER_DISARM_INFECT;    // avoid PL_viralmagic_annotations copying of magic
     HV *hv = (HV *)tags;
+    HE *he = hv_fetch_ent(hv, tag, TRUE, 0);
+    SV *val = HeVAL(he);
+
+    IV new_val = 1;
+    if (SvOK(val))
+        new_val += SvIV(val);
+
+    sv_setiv(val, new_val);
+    LEAVE_DISARM_INFECT;
+}
+
+static void remove_tag_hash_count(pTHX_ SV *tags, SV *tag)
+{
+    assert(VALID_HV_TAGS(tags));
+    assert(SvPOK(tag));
+
+    ENTER_DISARM_INFECT;
+    HV *hv = (HV *)tags;
     HE *he = hv_fetch_ent(hv, tag, FALSE, 0);
 
     if (he) {
-        SV *val = HeVAL(he);
-        SvIV_set(val, SvIV(val) + 1);
+        SV *sv = HeVAL(he);
+        IV val = SvIV(sv);
+        if ( val > 1 ) {
+            sv_setiv(sv, val - 1 );
+        }
+        else {
+            hv_delete(hv, HeKEY(he), HeKLEN(he), G_DISCARD);
+        }
     }
-    else {
-        hv_store_ent(hv, tag, newSViv(1), 0);
-    }
-    LEAVE_DISARM_INFECT;
 }
 
 static void merge_tags_hash_count(pTHX_ SV *src_tags, pTHX_ SV *dst_tags)
@@ -171,14 +231,58 @@ static void merge_tags_hash_count(pTHX_ SV *src_tags, pTHX_ SV *dst_tags)
     HE *src_he;
     ENTER_DISARM_INFECT;    // avoid PL_viralmagic_annotations copying of magic on hash values
     while (src_he = hv_iternext(src_hv)) {
-        SV *src_val = HeVAL(src_he);
-        SV **dst_valp = hv_fetch(dst_hv, HeKEY(src_he), HeKLEN(src_he), 0);
-        if (dst_valp && *dst_valp)
-            sv_setiv(*dst_valp, SvIV(src_val) + SvIV(*dst_valp));
-        else
-            hv_store(dst_hv, HeKEY(src_he), HeKLEN(src_he), newSVsv(src_val), HeHASH(src_he));
+        IV new_val = SvIV(HeVAL(src_he));
+        SV **dst_valp = hv_fetch(dst_hv, HeKEY(src_he), HeKLEN(src_he), TRUE);
+        if (dst_valp && *dst_valp && SvIOK(*dst_valp))
+            new_val += SvIV(*dst_valp);
+
+        sv_setiv(*dst_valp, new_val);
     }
     LEAVE_DISARM_INFECT;
+}
+
+static void add_tag_unique_hash(pTHX_ SV *tags, SV *tag)
+{
+    assert(VALID_HV_TAGS(tags));
+    assert(SvPOK(tag));
+
+    HV *hv = (HV *)tags;
+    HE *he = hv_fetch_ent(hv, tag, TRUE, 0);
+
+    SV *val = HeVAL(he);
+    if (!SvOK(val))
+        sv_set_true(val);
+}
+
+static void remove_tag_unique_hash(pTHX_ SV *tags, SV *tag)
+{
+    assert(VALID_HV_TAGS(tags));
+    assert(SvPOK(tag));
+
+    HV *hv = (HV *)tags;
+    HE *he = hv_fetch_ent(hv, tag, FALSE, 0);
+
+    if (he) {
+        hv_delete(hv, HeKEY(he), HeKLEN(he), G_DISCARD);
+    }
+}
+
+static void merge_tags_unique_hash(pTHX_ SV *src_tags, pTHX_ SV *dst_tags)
+{
+    assert(VALID_HV_TAGS(ohv));
+    assert(VALID_HV_TAGS(nhv));
+
+    HV *src_hv = (HV *)src_tags;
+    HV *dst_hv = (HV *)dst_tags;
+
+    hv_iterinit(src_hv);
+
+    HE *src_he;
+    while (src_he = hv_iternext(src_hv)) {
+        SV **dst_valp = hv_fetch(dst_hv, HeKEY(src_he), HeKLEN(src_he), TRUE);
+        if (!SvOK(*dst_valp))
+            sv_setiv(*dst_valp, 1);
+    }
 }
 
 /*** FORWARD DECLARATIONS FOR MAGIC HANDLING ***/
@@ -209,12 +313,12 @@ static SV *make_hash_value_tags(pTHX)
     return (SV *)newHV();
 }
 
-static SV *dup_array_value_tags(pTHX_ SV *value_tags)
+static SV *dup_array_value_tags(pTHX_ const SV* const value_tags)
 {
     return (SV *)newAVav((AV *)value_tags);
 }
 
-static SV *dup_hash_value_tags(pTHX_ SV *value_tags)
+static SV *dup_hash_value_tags(pTHX_ const SV* const value_tags)
 {
     return (SV *)newHVhv((HV *)value_tags);
 }
@@ -230,7 +334,7 @@ static void free_value_tags(pTHX_ SV *sv, MAGIC *mg)
     }
 }
 
-static SV *make_array_retval(pTHX_ MAGIC *mg)
+static SV *make_array_retval(pTHX_ const MAGIC* const mg)
 {
     assert(mg);
     SV *vt = VALUETAGS(mg);
@@ -241,7 +345,7 @@ static SV *make_array_retval(pTHX_ MAGIC *mg)
     return newRV((SV *)results);
 }
 
-static SV *make_hash_retval(pTHX_ MAGIC *mg)
+static SV *make_hash_retval(pTHX_ const MAGIC* const mg)
 {
     assert(mg);
 
@@ -294,6 +398,7 @@ static const struct ValueTagsBehavior behaviors[] = {
         .free_tags   = &free_value_tags,
         .make_retval = &make_array_retval,
         .add_tag     = &add_tag_unique_ref_array,
+        .remove_tag  = &remove_tag_unique_ref_array,
         .merge_tags  = &merge_tags_unique_ref_array,
     },
     [BEHAVIOR_APPEND_ARRAY] = {
@@ -302,6 +407,7 @@ static const struct ValueTagsBehavior behaviors[] = {
         .free_tags   = &free_value_tags,
         .make_retval = &make_array_retval,
         .add_tag     = &add_tag_append_array,
+        .remove_tag  = &remove_tag_append_array,
         .merge_tags  = &merge_tags_append_array,
     },
     [BEHAVIOR_HASH_COUNT] = {
@@ -310,20 +416,23 @@ static const struct ValueTagsBehavior behaviors[] = {
         .free_tags   = &free_value_tags,
         .make_retval = &make_hash_retval,
         .add_tag     = &add_tag_hash_count,
+        .remove_tag  = &remove_tag_hash_count,
         .merge_tags  = &merge_tags_hash_count,
+    },
+    [BEHAVIOR_UNIQUE_HASH] = {
+        .make_tags   = &make_hash_value_tags,
+        .dup_tags    = &dup_hash_value_tags,
+        .free_tags   = &free_value_tags,
+        .make_retval = &make_hash_retval,
+        .add_tag     = &add_tag_unique_hash,
+        .remove_tag  = &remove_tag_unique_hash,
+        .merge_tags  = &merge_tags_unique_hash,
     },
 };
 
 /*** VALUE-TAGS SPECIFICATIONS ***/
 
 #define MY_CXT_KEY "Scalar::ValueTags::_registry" XS_VERSION
-
-typedef struct {
-    struct ValueTagsSpec *vt_specs;
-    struct ValueTagsSpec *final_vt_spec;
-} my_cxt_t;
-
-START_MY_CXT
 
 // FIXME - must make these thread-safe (is MY_CXT the correct pattern?)
 
@@ -469,10 +578,16 @@ SVTAGS_APPEND_ARRAY()
   OUTPUT:
     RETVAL
 
-int
-SVTAGS_HASH_COUNT()
+int SVTAGS_HASH_COUNT()
   CODE:
     RETVAL = BEHAVIOR_HASH_COUNT;
+  OUTPUT:
+    RETVAL
+
+int
+SVTAGS_UNIQUE_HASH()
+  CODE:
+    RETVAL = BEHAVIOR_UNIQUE_HASH;
   OUTPUT:
     RETVAL
 
@@ -524,6 +639,29 @@ add_value_tag (SV *vt_type_ref, SV *sv_ref, SV *tag)
 
     SV *tags = VALUETAGS(mg);
     vt_spec->behavior->add_tag(aTHX_ tags, tag);
+#endif
+
+
+void
+remove_value_tag (SV *vt_type_ref, SV *sv_ref, SV *tag)
+  CODE:
+#ifdef HAVE_VALUE_MAGIC
+    VALIDATE_VT_TYPE(vt_type_ref);
+    VALIDATE_SV_TARGET(sv_ref);
+
+    // FIXME: add tag validation to vt_spec, and validate tag here
+
+    SV *vt_type = SvRV(vt_type_ref);
+    struct ValueTagsSpec *vt_spec = get_vt_spec(vt_type);
+    if (!vt_spec)
+        croak("Unregistered vt_type");
+
+    MAGIC *mg = init_value_tags_magic(vt_type, SvRV(sv_ref), NULL);
+
+    SV *tags = VALUETAGS(mg);
+    vt_spec->behavior->remove_tag(aTHX_ tags, tag);
+
+    // FIXME: should this return the removed tag(s)?
 #endif
 
 SV *
@@ -579,9 +717,11 @@ CLONE(...)
   CODE:
     MY_CXT_CLONE;
 
+# ifdef HAVE_VALUE_MAGIC
 BOOT:
 {
     MY_CXT_INIT;
     MY_CXT.vt_specs = NULL;
     MY_CXT.final_vt_spec = NULL;
 }
+# endif
