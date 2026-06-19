@@ -263,7 +263,9 @@ static void free_value_tags(pTHX_ SV *sv, MAGIC *mg)
 
 static SV *make_array_retval(pTHX_ MAGIC *mg)
 {
-    assert(mg);
+    if (!mg)
+        return newRV((SV *)newAV());
+
     SV *vt = VALUETAGS(mg);
     assert(SvOK(vt) && SvTYPE(vt) == SVt_PVAV);
 
@@ -274,7 +276,8 @@ static SV *make_array_retval(pTHX_ MAGIC *mg)
 
 static SV *make_hash_retval(pTHX_ MAGIC *mg)
 {
-    assert(mg);
+    if (!mg)
+        return newRV((SV *)newHV());
 
     SV *vt = VALUETAGS(mg);
     assert(SvOK(vt) && SvTYPE(vt) == SVt_PVHV);
@@ -587,12 +590,7 @@ get_value_tags (SV *vt_type_ref, SV *sv_ref)
     if (!vt_spec)
         croak("Unregistered vt_type");
 
-    if (mg) {
-        RETVAL = vt_spec->behavior->make_retval(aTHX_ mg);
-    }
-    else {
-        RETVAL = NULL;
-    }
+    RETVAL = vt_spec->behavior->make_retval(aTHX_ mg);
 #else
     RETVAL = NULL;
 #endif

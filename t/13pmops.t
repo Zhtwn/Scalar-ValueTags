@@ -35,11 +35,11 @@ sub list_value_tags_ok ( $code, $result, $name )
     my $repl = "repl"; add_value_tag( $vt_type, \$repl, [ "ignore-me" ] );
 
     my $x = "abcd"; $x =~ s/xyz/$repl/;
-    is( get_value_tags( $vt_type, \$x ), undef,
+    is( get_value_tags( $vt_type, \$x ), [],
         'var remains untagged after unsuccessful subst' );
 
     my $y = "abcd" =~ s/xyz/$repl/r;
-    is( get_value_tags( $vt_type, \$x ), undef,
+    is( get_value_tags( $vt_type, \$x ), [],
         'result remains untagged after unsuccessful subst non-destruct' );
 }
 

@@ -23,8 +23,8 @@ my $vt_type;
 
     my $var_two = 456;
 
-    is( get_value_tags( $vt_type, \$var_two ), undef,
-        'get_value_tags should return undef from untagged variable' );
+    is( get_value_tags( $vt_type, \$var_two ), [],
+        'get_value_tags should return empty array from untagged variable' );
 
     my $in_order = $var_one + $var_two;
 

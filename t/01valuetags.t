@@ -58,11 +58,11 @@ subtest_buffered clear_value_tags_validation => sub {
 subtest_buffered get_value_tags => sub {
     my $var = 123;
 
-    is( get_value_tags( $vt_type, \$var ), undef,
-        'get_value_tags on untagged variable should return undef' );
+    is( get_value_tags( $vt_type, \$var ), [],
+        'get_value_tags on untagged variable should return empty array' );
 
-    is( get_value_tags( $vt_type, \do{ 12 + 34 } ), undef,
-        'get_value_tags on empty intermediate expression should return undef' );
+    is( get_value_tags( $vt_type, \do{ 12 + 34 } ), [],
+        'get_value_tags on empty intermediate expression should return empty array' );
 };
 
 subtest_buffered value_tags_handling => sub {
@@ -76,8 +76,8 @@ subtest_buffered value_tags_handling => sub {
         'subsequent get_value_tags should return tag' );
 
     clear_value_tags( $vt_type, \$var );
-    is( get_value_tags( $vt_type, \$var ), undef,
-        'get_value_tags should return undef after tags are cleared' );
+    is( get_value_tags( $vt_type, \$var ), [],
+        'get_value_tags should return empty array after tags are cleared' );
 
     $var = 456;
     my $tag_two = 'tag_two';
@@ -85,16 +85,16 @@ subtest_buffered value_tags_handling => sub {
     is( get_value_tags( $vt_type, \$var ), [$tag_two],
         'get_value_tags should return added tag' );
     $var = 42;
-    is( get_value_tags( $vt_type, \$var ), undef,
-        'get_value_tags should return undef after var is set to new value' );
+    is( get_value_tags( $vt_type, \$var ), [],
+        'get_value_tags should return empty array after var is set to new value' );
 
     my $tag_three = 'tag_three';
     add_value_tag( $vt_type, \$var, $tag_three );
     is( get_value_tags( $vt_type, \$var ), [$tag_three],
         'get_value_tags should return added tag' );
     undef $var;
-    is( get_value_tags( $vt_type, \$var ), undef,
-        'get_value_tags should return undef after var is set to undef' );
+    is( get_value_tags( $vt_type, \$var ), [],
+        'get_value_tags should return empty array after var is set to undef' );
 
     add_value_tag( $vt_type, \$var, $tag_one );
     is( get_value_tags( $vt_type, \$var ), [$tag_one],
