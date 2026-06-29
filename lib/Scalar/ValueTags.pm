@@ -16,6 +16,7 @@ our @EXPORT = qw(
     add_value_tag
     clear_value_tags
     get_value_tags
+    remove_value_tag
 );
 
 1;
@@ -120,6 +121,8 @@ hash, with the tags as keys and C<true> as the value.
 When merging value tags, all tags that were set in any of the source
 variables will be set in the destination variable.
 
+L</remove_value_tag> will remove the given tag from the hash.
+
 =head3 SVTAGS_HASH_COUNT
 
 This behavior uses a hash to track the number of times each string tag
@@ -130,6 +133,9 @@ been set as the value.
 When merging value tags, the tag counts from the tags of all source
 variables will be summed into the corresponding hash entries in the
 destination variable.
+
+L</remove_value_tag> will remove the given tag from the hash, along with
+its count.
 
 =head3 SVTAGS_APPEND_ARRAY
 
@@ -142,6 +148,9 @@ When merging value tags, the tags of all source variables will be
 appended into the tags in the destination variable. The ordering of the
 appended array is not deterministic.
 
+L</remove_value_tag> will remove every instance of the given tag from the
+array.
+
 =head3 SVTAGS_UNIQUE_REF_ARRAY
 
 This behavior uses an array to track the unique reference address of all
@@ -151,6 +160,9 @@ de-duplicated by the reference address of each tag.
 
 When merging value tags, the destination variable receives all unique
 reference addresses from the tags of all source variables.
+
+L</remove_value_tag> will remove the instance of the given tag from the
+array.
 
 =head2 Guidelines
 
@@ -331,6 +343,41 @@ The C<$tag> must be compatible with the registered behavior.
     # using SVTAGS_APPEND_ARRAY
     my $var;
     add_value_tag( $vt_type, \$var, 'my tag' );  # tag may be ref or string
+    my $tags = get_value_tags( $vt_type, \$var );
+    # returns  [ 'my tag' ]
+
+=head2 remove_value_tag
+
+    remove_value_tag( $vt_type, \$var, $tag );
+
+C<remove_value_tag> removes the given tag to the value tags for the specified
+value-tags type.
+
+C<$vt_type> must be the value returned from a L</register_value_tags_type> call.
+
+The variable must always be passed as a reference, since C<add_value_tag> needs
+to modify the SV* directly.
+
+For tag types such as C<SVTAGS_APPEND_ARRAY>, C<remove_value_tag> removes all
+instances of the given tag from the array.
+
+The C<$tag> must be compatible with the registered behavior.
+
+    # using SVTAGS_UNIQUE_HASH or SVTAGS_HASH_COUNT
+    my $var;
+    remove_value_tag( $vt_type, \$var, 'my tag' ); # tag must be string
+    my $tags = get_value_tags( $vt_type, \$var );
+    #  returns { 'my tag' => true }
+
+    # using SVTAGS_UNIQUE_REF_ARRAY
+    my $var;
+    remove_value_tag( $vt_type, \$var, [ 123 ] );  # tag must be ref
+    my $tags = get_value_tags( $vt_type, \$var );
+    #  returns [ [ 123 ] ]
+
+    # using SVTAGS_APPEND_ARRAY
+    my $var;
+    remove_value_tag( $vt_type, \$var, 'my tag' );  # tag may be ref or string
     my $tags = get_value_tags( $vt_type, \$var );
     # returns  [ 'my tag' ]
 

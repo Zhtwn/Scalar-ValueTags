@@ -13,7 +13,7 @@ my $vt_type = register_value_tags_type(SVTAGS_UNIQUE_REF_ARRAY);
 add_value_tag( $vt_type, \my $var, [] );
 clear_value_tags( $vt_type, \$var );
 
-is( get_value_tags( $vt_type, \$var ), undef,
+is( get_value_tags( $vt_type, \$var ), [],
     'variable should not have value tags' );
 
 done_testing;

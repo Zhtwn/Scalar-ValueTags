@@ -23,8 +23,8 @@ my $vt_type;
 
     my $var_two = 456;
 
-    is( get_value_tags( $vt_type, \$var_two ), undef,
-        'get_value_tags should return undef from untagged variable' );
+    is( get_value_tags( $vt_type, \$var_two ), [],
+        'get_value_tags should return empty array from untagged variable' );
 
     my $in_order = $var_one + $var_two;
 
@@ -87,5 +87,66 @@ my $vt_type;
         'after second tag_two added, get_value_tags should return two copies of tag_one and two of tag_two' );
 }
 
+# removing value tags
+{
+    my $tag_one   = { tag => 'one' };
+    my $tag_two   = { tag => 'two' };
+    my $tag_three = { tag => 'three' };
+
+    my $var = 123;
+    add_value_tag( $vt_type, \$var, $tag_one );
+    add_value_tag( $vt_type, \$var, $tag_two );
+    add_value_tag( $vt_type, \$var, $tag_three );
+    add_value_tag( $vt_type, \$var, $tag_one );
+    add_value_tag( $vt_type, \$var, $tag_two );
+    add_value_tag( $vt_type, \$var, $tag_three );
+
+    is( get_value_tags( $vt_type, \$var ), [
+            exact_ref($tag_one), exact_ref($tag_two), exact_ref($tag_three),
+            exact_ref($tag_one), exact_ref($tag_two), exact_ref($tag_three)
+        ],
+        'SETUP: get_value_tags should return all three tags' );
+
+    # case 1: remove internal tag
+    remove_value_tag( $vt_type, \$var, $tag_two );
+
+    is( get_value_tags( $vt_type, \$var ), [
+            exact_ref($tag_one), exact_ref($tag_three),
+            exact_ref($tag_one), exact_ref($tag_three)
+        ],
+        'after tag_two removed, get_value_tags should return tag_one and tag_three' );
+
+    # case 2: remove last tag
+    remove_value_tag( $vt_type, \$var, $tag_three );
+
+    is( get_value_tags( $vt_type, \$var ), [ exact_ref($tag_one), exact_ref($tag_one) ],
+        'after tag_three removed, get_value_tags should return tag_one' );
+
+    # case 3: remove first tag
+    remove_value_tag( $vt_type, \$var, $tag_one );
+
+    is( get_value_tags( $vt_type, \$var ), [],
+        'after tag_one removed, get_value_tags should return empty array' );
+
+    # case 3: remove first tag
+    remove_value_tag( $vt_type, \$var, $tag_one );
+
+    is( get_value_tags( $vt_type, \$var ), [],
+        'after tag_one removed, get_value_tags should return empty array' );
+
+    # case 4: remove nonexistent tag
+    remove_value_tag( $vt_type, \$var, $tag_one );
+
+    is( get_value_tags( $vt_type, \$var ), [],
+        'after nonexistent tag removed, get_value_tags should return empty array' );
+
+    # case 5: remove tag from untagged var
+    my $untagged_var = 9;
+    remove_value_tag( $vt_type, \$untagged_var, $tag_one );
+
+    is( get_value_tags( $vt_type, \$untagged_var ), [],
+        'after tag removed from untagged variable, get_value_tags should return empty array' );
+
+}
+
 done_testing;
-1;

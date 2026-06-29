@@ -23,8 +23,8 @@ my $vt_type;
 
     my $var_two = 456;
 
-    is( get_value_tags( $vt_type, \$var_two ), undef,
-        'get_value_tags should return undef from untagged variable' );
+    is( get_value_tags( $vt_type, \$var_two ), {},
+        'get_value_tags should return empty hash from untagged variable' );
 
     my $in_order = $var_one + $var_two;
 
@@ -86,6 +86,57 @@ my $vt_type;
 
     is( get_value_tags( $vt_type, \$var ), { $tag_one => 2, $tag_two => 2 },
         'after second tag_two added, get_value_tags should return two counts of both tag_one and tag_two' );
+}
+
+# removing value tags
+{
+    my $tag_one   = 'one';
+    my $tag_two   = 'two';
+    my $tag_three = 'three';
+
+    # add each tag that number of times
+    my $var = 123;
+    add_value_tag( $vt_type, \$var, $tag_one );
+    add_value_tag( $vt_type, \$var, $tag_two );
+    add_value_tag( $vt_type, \$var, $tag_two );
+    add_value_tag( $vt_type, \$var, $tag_three );
+    add_value_tag( $vt_type, \$var, $tag_three );
+    add_value_tag( $vt_type, \$var, $tag_three );
+
+    is( get_value_tags( $vt_type, \$var ), { $tag_one => 1, $tag_two => 2, $tag_three => 3 },
+        'SETUP: get_value_tags should return correct counts for all three tags' );
+
+    remove_value_tag( $vt_type, \$var, $tag_one );
+
+    is( get_value_tags( $vt_type, \$var ), { $tag_two => 2, $tag_three => 3 },
+        'after one tag_one removed, get_value_tags should return tag_two = 2 and tag_three = 3' );
+
+    remove_value_tag( $vt_type, \$var, $tag_three );
+
+    is( get_value_tags( $vt_type, \$var ), { $tag_two => 2, $tag_three => 2 },
+        'after one tag_three removed, get_value_tags should return tag_two = 2 and tag_three = 2' );
+
+    # remove all remaining tags
+    remove_value_tag( $vt_type, \$var, $tag_two );
+    remove_value_tag( $vt_type, \$var, $tag_two );
+    remove_value_tag( $vt_type, \$var, $tag_three );
+    remove_value_tag( $vt_type, \$var, $tag_three );
+
+    is( get_value_tags( $vt_type, \$var ), {},
+        'after all remaining tags removed, get_value_tags should return no tags' );
+
+    # remove nonexistent tag
+    remove_value_tag( $vt_type, \$var, $tag_one );
+
+    is( get_value_tags( $vt_type, \$var ), {},
+        'after nonexistent tag removed, get_value_tags should return empty hash' );
+
+    # remove tag from untagged var
+    my $untagged_var = 9;
+    remove_value_tag( $vt_type, \$untagged_var, $tag_one );
+
+    is( get_value_tags( $vt_type, \$untagged_var ), {},
+        'after tag removed from untagged variable, get_value_tags should return empty hash' );
 }
 
 done_testing;
