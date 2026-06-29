@@ -9,18 +9,6 @@
 #  include "DMD_helper.h"
 #endif
 
-/* Back-compat for older perls
- * ---------------------------
- */
-
-#ifndef av_push_simple
-#  define av_push_simple(av, sv)  av_push(av, sv)
-#endif
-
-#ifndef av_count
-#  define av_count(av) (AvFILL(av)+1)
-#endif
-
 #if defined(sv_magicv2_add)
 #  define HAVE_VALUE_MAGIC
 #endif
@@ -42,6 +30,13 @@ enum behavior_types {
 
 #  define LEAVE_DISARM_INFECT \
   LEAVE
+
+typedef struct {
+    struct ValueTagsSpec *vt_specs;
+    struct ValueTagsSpec *final_vt_spec;
+} my_cxt_t;
+
+START_MY_CXT
 
 /*** Structs ***/
 
@@ -75,7 +70,6 @@ struct ValueTagsSpec {
 
 static void av_append_tag(pTHX_ AV *av, SV *tag, bool check_uniq)
 {
-    assert(VALID_AV_TAGS(sav));
     assert(SvROK(tag));
 
     if (check_uniq) {
@@ -443,13 +437,6 @@ static const struct ValueTagsBehavior behaviors[] = {
 
 #define MY_CXT_KEY "Scalar::ValueTags::_registry" XS_VERSION
 
-typedef struct {
-    struct ValueTagsSpec *vt_specs;
-    struct ValueTagsSpec *final_vt_spec;
-} my_cxt_t;
-
-START_MY_CXT
-
 // FIXME - must make these thread-safe (is MY_CXT the correct pattern?)
 
 static struct ValueTagsSpec *S_get_vt_spec(pTHX_ SV *vt_type)
@@ -729,9 +716,11 @@ CLONE(...)
   CODE:
     MY_CXT_CLONE;
 
+# ifdef HAVE_VALUE_MAGIC
 BOOT:
 {
     MY_CXT_INIT;
     MY_CXT.vt_specs = NULL;
     MY_CXT.final_vt_spec = NULL;
 }
+# endif

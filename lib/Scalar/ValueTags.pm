@@ -423,3 +423,13 @@ the source code origin of that annotation.
 
 To enable this, use C<perl Build.PL --with-trace>.
 
+=head1 AUTHORS
+
+=over
+
+=item * Noel Maddy <zhtwnpanta@gmail.com>
+
+=back
+
+=cut
+
