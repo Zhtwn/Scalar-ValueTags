@@ -70,7 +70,7 @@ struct ValueTagsSpec {
 
 static void av_append_tag(pTHX_ AV *av, SV *tag, bool check_uniq)
 {
-    assert(SvROK(tag));
+    assert(SvOK(tag));
 
     if (check_uniq) {
         SV **svp = AvARRAY(av);
@@ -135,7 +135,7 @@ static void merge_tags_unique_ref_array (pTHX_ SV *src_tags, SV *dst_tags)
 static void add_tag_append_array (pTHX_ SV *tags, SV *tag)
 {
     assert(VALID_AV_TAGS(tags));
-    assert(SvROK(tag));
+    assert(SvOK(tag));
 
     // never check_uniq
     av_append_tag(aTHX_ (AV *)tags, tag, false);
@@ -340,7 +340,7 @@ static SV *make_array_retval(pTHX_ MAGIC *mg)
         return newRV((SV *)newAV());
 
     SV *vt = VALUETAGS(mg);
-    assert(SvOK(vt) && SvTYPE(vt) == SVt_PVAV);
+    assert(SvTYPE(vt) == SVt_PVAV);
 
     AV *results = newAVav((AV *)vt);
 
@@ -353,7 +353,7 @@ static SV *make_hash_retval(pTHX_ MAGIC *mg)
         return newRV((SV *)newHV());
 
     SV *vt = VALUETAGS(mg);
-    assert(SvOK(vt) && SvTYPE(vt) == SVt_PVHV);
+    assert(SvTYPE(vt) == SVt_PVHV);
     HV *results = newHVhv((HV *)vt);
 
     return newRV((SV *)results);
