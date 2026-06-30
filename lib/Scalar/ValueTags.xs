@@ -26,7 +26,7 @@ enum behavior_types {
 #ifdef HAVE_VALUE_MAGIC
 #  define ENTER_DISARM_INFECT \
   ENTER;  \
-  SAVESPTR(PL_viralmagic_annotations); PL_viralmagic_annotations = NULL
+  SAVESPTR(PL_valuemagic_annotations); PL_valuemagic_annotations = NULL
 
 #  define LEAVE_DISARM_INFECT \
   LEAVE
@@ -184,7 +184,7 @@ static void add_tag_hash_count(pTHX_ SV *tags, SV *tag)
     assert(VALID_HV_TAGS(tags));
     assert(tag);
 
-    ENTER_DISARM_INFECT;    // avoid PL_viralmagic_annotations copying of magic
+    ENTER_DISARM_INFECT;    // avoid PL_valuemagic_annotations copying of magic
     HV *hv = (HV *)tags;
     HE *he = hv_fetch_ent(hv, tag, TRUE, 0);
     SV *val = HeVAL(he);
@@ -229,7 +229,7 @@ static void merge_tags_hash_count(pTHX_ SV *src_tags, pTHX_ SV *dst_tags)
     hv_iterinit(src_hv);
 
     HE *src_he;
-    ENTER_DISARM_INFECT;    // avoid PL_viralmagic_annotations copying of magic on hash values
+    ENTER_DISARM_INFECT;    // avoid PL_valuemagic_annotations copying of magic on hash values
     while (src_he = hv_iternext(src_hv)) {
         IV new_val = SvIV(HeVAL(src_he));
         SV **dst_valp = hv_fetch(dst_hv, HeKEY(src_he), HeKLEN(src_he), TRUE);
