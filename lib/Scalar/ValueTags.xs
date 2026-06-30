@@ -359,7 +359,7 @@ static SV *make_hash_retval(pTHX_ MAGIC *mg)
     return newRV((SV *)results);
 }
 
-static void infect_value_tags(pTHX_ SV *src_sv, MAGIC *src_mg, SV *dst_sv, MAGIC *dst_mg)
+static void propagate_value_tags(pTHX_ SV *src_sv, MAGIC *src_mg, SV *dst_sv, MAGIC *dst_mg)
 {
     assert(src_sv);
     assert(src_mg);
@@ -498,7 +498,7 @@ static const struct ScalarValueMagicFunctions magic_funcs = {
     .ver       = 2,   /* Magic v2 */
     .shape     = MGv2s_SCALARVALUE,
     .free_mg   = &free_value_tags,
-    .infect    = &infect_value_tags,
+    .propagate = &propagate_value_tags,
     .user_size = sizeof(struct ValueTagsUserStruct),
 };
 
