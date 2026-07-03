@@ -16,13 +16,14 @@ my $build = Module::Build->new(
         'perl' => '5.028',
     },
     test_requires => {
-        'Test2::V0'      => 0,
+        'Test2::V0' => 0,
     },
     extra_compiler_flags =>
       [ $with_trace ? ("-DDEBUG_TRACE_ANNOTATIONS") : (), ],
-    license        => 'perl',
-    create_license => 1,
-    create_readme  => 1,
+    license         => 'perl',
+    create_license  => 1,
+    create_manifest => 1,
+    create_readme   => 1,
 );
 
 if (
