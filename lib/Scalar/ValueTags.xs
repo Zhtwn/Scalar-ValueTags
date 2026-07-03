@@ -387,11 +387,54 @@ static void propagate_value_tags(pTHX_ SV *src_sv, MAGIC *src_mg, SV *dst_sv, MA
 }
 
 #ifdef DEBUG_TRACE_ANNOTATIONS
-        // FIXME: handle adding trace magic somewhere
-        // copying existing annotation: sv will always have debug tracing
-//      if(new) {
-//          sv_magicext(new, (SV *)make_traceav_copy(svp[idx]), PERL_MAGIC_ext, &vtbl_hound_debugtrace, NULL, 0);
-//      }
+
+static MGVTBL vtbl_valuetags_debugtrace = { /* empty */ };
+
+#define make_traceav_orig()  S_make_traceav_orig(aTHX)
+static SV *S_make_traceav_orig(pTHX)
+{
+  ENTER_DISARM_INFECT;
+
+  AV *trace = newAV();
+  av_push(trace, newSVuv(0));
+  av_push(trace, newSVpvf("%s:%d", CopFILE(PL_curcop), CopLINE(PL_curcop)));
+  for(I32 cxix = cxstack_ix; cxix >= 0; cxix--) {
+    if(av_count(trace) > 5)
+      break;
+
+    PERL_CONTEXT *cx = cxstack + cxix;
+    if(CxTYPE(cx) == CXt_SUB) {
+      COP *oldcop = cx->blk_oldcop;
+      av_push(trace, newSVpvf("%s:%d", CopFILE(oldcop), CopLINE(oldcop)));
+    }
+  }
+
+  LEAVE_DISARM_INFECT;
+
+  return (SV *)trace;
+}
+
+#define make_traceav_copy(oann)  S_make_traceav_copy(aTHX_ oann)
+static SV *S_make_traceav_copy(pTHX_ SV *oann)
+{
+  if(!SvMAGICAL(oann))
+    return NULL;
+
+  ENTER_DISARM_INFECT;
+  MAGIC *omg = mg_findext(oann, PERL_MAGIC_ext, &vtbl_hound_debugtrace);
+  assert(omg);
+
+  AV *ntrace = newAV();
+
+  AV *otrace = (AV *)omg->mg_obj;
+  UV otrace_age = SvUV(AvARRAY(otrace)[0]);
+
+  av_push(ntrace, newSVuv(otrace_age + 1));
+
+  LEAVE_DISARM_INFECT;
+
+  return (SV *)ntrace;
+}
 #endif
 
 static const struct ValueTagsBehavior behaviors[] = {
