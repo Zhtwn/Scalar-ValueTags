@@ -24,11 +24,11 @@ enum behavior_types {
 };
 
 #ifdef HAVE_VALUE_MAGIC
-#  define ENTER_DISARM_INFECT \
+#  define ENTER_DISARM_PROPAGATE \
   ENTER;  \
   SAVESPTR(PL_valuemagic_annotations); PL_valuemagic_annotations = NULL
 
-#  define LEAVE_DISARM_INFECT \
+#  define LEAVE_DISARM_PROPAGATE \
   LEAVE
 
 typedef struct {
@@ -184,7 +184,7 @@ static void add_tag_hash_count(pTHX_ SV *tags, SV *tag)
     assert(VALID_HV_TAGS(tags));
     assert(tag);
 
-    ENTER_DISARM_INFECT;    // avoid PL_valuemagic_annotations copying of magic
+    ENTER_DISARM_PROPAGATE;    // avoid PL_valuemagic_annotations copying of magic
     HV *hv = (HV *)tags;
     HE *he = hv_fetch_ent(hv, tag, TRUE, 0);
     SV *val = HeVAL(he);
@@ -194,7 +194,7 @@ static void add_tag_hash_count(pTHX_ SV *tags, SV *tag)
         new_val += SvIV(val);
 
     sv_setiv(val, new_val);
-    LEAVE_DISARM_INFECT;
+    LEAVE_DISARM_PROPAGATE;
 }
 
 static void remove_tag_hash_count(pTHX_ SV *tags, SV *tag)
@@ -202,7 +202,7 @@ static void remove_tag_hash_count(pTHX_ SV *tags, SV *tag)
     assert(VALID_HV_TAGS(tags));
     assert(SvPOK(tag));
 
-    ENTER_DISARM_INFECT;
+    ENTER_DISARM_PROPAGATE;
     HV *hv = (HV *)tags;
     HE *he = hv_fetch_ent(hv, tag, FALSE, 0);
 
@@ -229,7 +229,7 @@ static void merge_tags_hash_count(pTHX_ SV *src_tags, pTHX_ SV *dst_tags)
     hv_iterinit(src_hv);
 
     HE *src_he;
-    ENTER_DISARM_INFECT;    // avoid PL_valuemagic_annotations copying of magic on hash values
+    ENTER_DISARM_PROPAGATE;    // avoid PL_valuemagic_annotations copying of magic on hash values
     while (src_he = hv_iternext(src_hv)) {
         IV new_val = SvIV(HeVAL(src_he));
         SV **dst_valp = hv_fetch(dst_hv, HeKEY(src_he), HeKLEN(src_he), TRUE);
@@ -238,7 +238,7 @@ static void merge_tags_hash_count(pTHX_ SV *src_tags, pTHX_ SV *dst_tags)
 
         sv_setiv(*dst_valp, new_val);
     }
-    LEAVE_DISARM_INFECT;
+    LEAVE_DISARM_PROPAGATE;
 }
 
 static void add_tag_unique_hash(pTHX_ SV *tags, SV *tag)
@@ -374,7 +374,7 @@ static void propagate_value_tags(pTHX_ SV *src_sv, MAGIC *src_mg, SV *dst_sv, MA
     SV *vt_type = MgAUXSV(src_mg);
     struct ValueTagsSpec *vt_spec = get_vt_spec(vt_type);
 
-    // dst_mg is never passed in, since MGv2f_SCALARVALUE_INFECTIOUS is not set
+    // dst_mg is never passed in, since MGv2f_SCALARVALUE_AUTOPROPAGATE is not set
     dst_mg = get_value_tags_magic(vt_type, dst_sv);
 
     if (dst_mg) {
