@@ -16,7 +16,6 @@ my $build = Module::Build->new(
         'perl' => '5.028',
     },
     test_requires => {
-        'List::Util::PP' => 0,
         'Test2::V0'      => 0,
     },
     extra_compiler_flags =>
