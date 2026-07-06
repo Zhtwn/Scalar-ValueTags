@@ -603,6 +603,15 @@ value_tags_enabled()
     XSRETURN_NO;
 #endif
 
+void
+value_tags_tracing_enabled()
+   CODE:
+#if defined(HAVE_VALUE_MAGIC) && defined(DEBUG_TRACE_ANNOTATIONS)
+    XSRETURN_YES;
+#else
+    XSRETURN_NO;
+#endif
+
 SV *
 register_value_tags_type (SV *behavior)
   CODE:

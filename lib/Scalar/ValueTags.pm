@@ -12,6 +12,7 @@ our @EXPORT = qw(
     SVTAGS_HASH_COUNT
     SVTAGS_UNIQUE_HASH
     value_tags_enabled
+    value_tags_tracing_enabled
     register_value_tags_type
     add_value_tag
     clear_value_tags
