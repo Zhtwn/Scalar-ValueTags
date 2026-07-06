@@ -9,6 +9,7 @@ my $with_trace;
 
 my $build = Module::Build->new(
     module_name        => 'Scalar::ValueTags',
+    dist_author        => 'Noel Maddy <ZHTWN@cpan.org',
     configure_requires => {
         'Module::Build' => "0.4004",    # test_requires
     },
