@@ -1,9 +1,10 @@
-package Scalar::ValueTags 0.001;
+package Scalar::ValueTags;
 
 use v5.44;
 
+our $VERSION = '0.001_01';
 require XSLoader;
-XSLoader::load( __PACKAGE__, our $VERSION );
+XSLoader::load( __PACKAGE__, $VERSION );
 
 use Exporter 'import';
 our @EXPORT = qw(
