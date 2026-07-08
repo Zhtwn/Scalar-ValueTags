@@ -9,3 +9,4 @@ lib/.*\.c
 lib/.*\.o
 ^MYMETA\.yml$
 ^MYMETA\.json$
+Scalar-ValueTags.*\.tar\.gz
