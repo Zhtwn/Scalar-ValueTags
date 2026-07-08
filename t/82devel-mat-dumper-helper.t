@@ -11,11 +11,13 @@ BEGIN {
    require Devel::MAT::Dumper;
 }
 
-use Data::Hounding;
-skip_all "Data::Hounding is not available" unless IS_HOUNDING_ENABLED;
+use Scalar::ValueTags;
+skip_all "Scalar::ValueTags is not available" unless value_tags_enabled;
+
+my $vt_type = register_value_tags_type(SVTAGS_UNIQUE_REF_ARRAY);
 
 my $var = 123;
-hound_apply( \$var, my $datum = { data => "here" } );
+add_value_tag( $vt_type, \$var, my $datum = { data => "here" } );
 
 ( my $file = __FILE__ ) =~ s/\.t$/.pmat/;
 Devel::MAT::Dumper::dump( $file );
@@ -25,10 +27,10 @@ my $pmat = Devel::MAT->load( $file );
 my $df = $pmat->dumpfile;
 
 # Main vtbl root
-my $vtbl_at = eval { $df->root_at( "the Data::Hounding VTBL" ) || $df->root_at( "the Data::Hounding Hook" ) };
-ok( defined $vtbl_at, 'Dumpfile records address of Data::Hounding VTBL or Hook' );
+my $vtbl_at = eval { $df->root_at( "the Scalar::ValueTags VTBL" ) || $df->root_at( "the Scalar::ValueTags Hook" ) };
+ok( defined $vtbl_at, 'Dumpfile records address of Scalar::ValueTags VTBL or Hook' );
 
-# $var has hounding
+# $var has value tags
 {
     my $main_cv = $df->main_cv;
     ok( my $var_sv = $main_cv->maybe_lexvar( '$var' ), 'main_cv has $var' );
@@ -36,10 +38,10 @@ ok( defined $vtbl_at, 'Dumpfile records address of Data::Hounding VTBL or Hook' 
     my @magics = $var_sv->magic;
     ok( scalar @magics, 'main_cv $var has some magic' );
 
-    my ( $hounding_magic ) = grep { $_->vtbl == $vtbl_at } @magics;
-    ok( defined $hounding_magic, 'main_cv $var has hounding magic' );
+    my ( $value_tags_magic ) = grep { $_->vtbl == $vtbl_at } @magics;
+    ok( defined $value_tags_magic, 'main_cv $var has value tags magic' );
 
-    ok( my $obj_sv = $hounding_magic->obj, 'hounding magic has obj' );
+    ok( my $obj_sv = $value_tags_magic->obj, 'value tags magic has obj' );
     is( $obj_sv->type, "ARRAY", 'magic obj is ARRAY' );
     is( scalar $obj_sv->elems, 1, 'magic obj array has 1 elem' );
 
