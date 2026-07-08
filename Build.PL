@@ -25,6 +25,12 @@ my $build = Module::Build->new(
     create_license  => 1,
     create_manifest => 1,
     create_readme   => 1,
+    add_to_cleanup  => [
+        'LICENSE',
+        'MANIFEST',
+        'META.*',
+        'README',
+    ],
 );
 
 if (
