@@ -425,6 +425,10 @@ the source code origin of that annotation.
 
 To enable this, use C<perl Build.PL --with-trace>.
 
+=head1 LICENSE
+
+This module is released under the same terms as Perl itself.
+
 =head1 AUTHORS
 
 =over
