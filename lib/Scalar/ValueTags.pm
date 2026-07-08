@@ -1,6 +1,6 @@
 package Scalar::ValueTags 0.001;
 
-use v5.28;
+use v5.44;
 
 require XSLoader;
 XSLoader::load( __PACKAGE__, our $VERSION );
