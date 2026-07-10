@@ -1,9 +1,10 @@
-package Scalar::ValueTags 0.001;
+package Scalar::ValueTags;
 
-use v5.28;
+use v5.44;
 
+our $VERSION = '0.001_01';
 require XSLoader;
-XSLoader::load( __PACKAGE__, our $VERSION );
+XSLoader::load( __PACKAGE__, $VERSION );
 
 use Exporter 'import';
 our @EXPORT = qw(
@@ -12,6 +13,7 @@ our @EXPORT = qw(
     SVTAGS_HASH_COUNT
     SVTAGS_UNIQUE_HASH
     value_tags_enabled
+    value_tags_tracing_enabled
     register_value_tags_type
     add_value_tag
     clear_value_tags
@@ -43,7 +45,7 @@ C<Scalar::ValueTags> - Attach propagated metadata to data values
 
     # value tags are propagated along with data value
     my $bar = 10;
-    add_value_tags( $vt_type, \$bar, "origin: elsewhere" );
+    add_value_tag( $vt_type, \$bar, "origin: elsewhere" );
 
     my $baz = $foo + $bar;
 
@@ -180,7 +182,7 @@ Structured data can be serialized into the string value tags, if needed.
 The serialization must be canonical, so that there is a unique string
 representation for any given data structure.
 
-    add_value_tags( $vt_type, \$var, encode_json( { ... } ) );
+    add_value_tag( $vt_type, \$var, encode_json( { ... } ) );
 
 Since the tags are stored as hash keys, identical tags share the same memory.
 
@@ -196,7 +198,7 @@ Structured data can be serialized into the string value tags, if needed.
 The serialization must be canonical, so that there is a unique string
 representation for any given data structure.
 
-    add_value_tags( $vt_type, \$var, encode_json( { ... } ) );
+    add_value_tag( $vt_type, \$var, encode_json( { ... } ) );
 
 Since the tags are stored as hash keys, identical tags share the same memory.
 
@@ -227,7 +229,7 @@ merging, the size of the value tags structure depends on the number of
 unique value tags that have been merged.
 
 Use this behavior if you have structured data for tags and adding new
-tags with C<add_value_tags> is done often, since there is no additional
+tags with C<add_value_tag> is done often, since there is no additional
 serialization cost (unlike SVTAGS_UNIQUE_HASH), but there is additional
 merging cost.
 
@@ -249,50 +251,50 @@ Basically,
 
 =item * Scalar value magic is added to a variable when a value tag is added
 
-    add_value_tags( $vt_type, \$var, 'foo' );
+    add_value_tag( $vt_type, \$var, 'foo' );
 
 =item * Value tags are duplicated upon assignment from a tagged value
 
-    add_value_tags( $vt_type, \$foo, 'foo' );
+    add_value_tag( $vt_type, \$foo, 'foo' );
     $bar = $foo;
     # $bar now has the same 'foo' tag as $foo
 
 =item * Value tags are merged when multiple source values are combined
 
     $foo = 3;
-    add_value_tags( $vt_type, \$foo, 'foo' );
+    add_value_tag( $vt_type, \$foo, 'foo' );
     $bar = 5;
-    add_value_tags( $vt_type, \$bar, 'bar' );
+    add_value_tag( $vt_type, \$bar, 'bar' );
     $foo += $bar;
     # $foo now has both 'foo' and 'bar' tags
 
 =item * Existing value tags are removed when value is overwritten
 
     $foo = 1;
-    add_value_tags( $vt_type, \$foo, 'foo' );
+    add_value_tag( $vt_type, \$foo, 'foo' );
     $bar = 5;
-    add_value_tags( $vt_type, \$bar, 'bar' );
+    add_value_tag( $vt_type, \$bar, 'bar' );
     $foo = $bar;
     # $foo now has only the 'bar' tag
 
 =item * Value tags are removed when the value is set to C<undef>
 
     $foo = 1;
-    add_value_tags( $vt_type, \$foo, 'foo' );
+    add_value_tag( $vt_type, \$foo, 'foo' );
     undef $foo;
     # $foo now has no tags
 
 =item * Value tags on source string are preserved through regexps
 
     $foo = 'this is';
-    add_value_tags( $vt_type, \$foo, 'foo' );
+    add_value_tag( $vt_type, \$foo, 'foo' );
     ($bar) = $foo =~ m/is/;
     # $bar now has the 'foo' tag
 
 =item * Hash keys cannot contain value tags
 
     $foo = 'foo';
-    add_value_tags( $vt_type, \$foo, 'foo' );
+    add_value_tag( $vt_type, \$foo, 'foo' );
     %bar = ( $foo => 8 );
     for my $key ( keys %bar ) {
         # $key has no value tags
@@ -422,6 +424,10 @@ additional Perl magic is added to each of the value tags indicating
 the source code origin of that annotation.
 
 To enable this, use C<perl Build.PL --with-trace>.
+
+=head1 LICENSE
+
+This module is released under the same terms as Perl itself.
 
 =head1 AUTHORS
 

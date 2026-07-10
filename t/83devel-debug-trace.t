@@ -15,13 +15,15 @@ BEGIN {
     require Devel::MAT::Dumper;
 }
 
-use Data::Hounding;
-skip_all "Data::Hounding is not available" unless IS_HOUNDING_ENABLED;
-skip_all "Data::Hounding debug tracing is not enabled"
-  unless IS_HOUNDING_TRACING_ENABLED;
+use Scalar::ValueTags;
+skip_all "Scalar::ValueTags is not available" unless value_tags_enabled;
+skip_all "Scalar::ValueTags debug tracing is not enabled"
+  unless value_tags_tracing_enabled;
+
+my $vt_type = register_value_tags_type(SVTAGS_UNIQUE_REF_ARRAY);
 
 my $orig_var = 123;
-hound_apply( \$orig_var, my $datum = { data => "here" } );
+add_value_tags( $vt_type, \$orig_var, my $datum = { data => "here" } );
 my $derived_var = $orig_var;
 
 ( my $file = __FILE__ ) =~ s/\.t$/.pmat/;
@@ -33,29 +35,29 @@ my $df   = $pmat->dumpfile;
 
 # Main vtbl root
 my $vtbl_at = eval {
-    $df->root_at("the Data::Hounding VTBL")
-      || $df->root_at("the Data::Hounding Hook");
+    $df->root_at("the Scalar::ValueTags VTBL")
+      || $df->root_at("the Scalar::ValueTags Hook");
 };
 ok( defined $vtbl_at,
-    'Dumpfile records address of Data::Hounding VTBL or Hook' );
+    'Dumpfile records address of Scalar::ValueTags VTBL or Hook' );
 my $trace_vtbl_at =
-  eval { $df->root_at("the Data::Hounding debug trace VTBL") };
+  eval { $df->root_at("the Scalar::ValueTags debug trace VTBL") };
 ok( defined $trace_vtbl_at,
-    'Dumpfile records address of Data::Hounding debug trace VTBL' );
+    'Dumpfile records address of Scalar::ValueTags debug trace VTBL' );
 
 sub tracing_ok ( $var_sv, $expected, $varname ) {
     my @magics = $var_sv->magic;
 
-    my ($hounding_magic) = grep { $_->vtbl == $vtbl_at } @magics;
-    ok( defined $hounding_magic, "main_cv $varname has hounding magic" );
+    my ($value_tags_magic) = grep { $_->vtbl == $vtbl_at } @magics;
+    ok( defined $value_tags_magic, "main_cv $varname has value tags magic" );
 
-    ok( my $obj_sv = $hounding_magic->obj, 'hounding magic has obj' );
-    is( $obj_sv->type,         "ARRAY", 'hounding magic obj is ARRAY' );
-    is( scalar $obj_sv->elems, 1,       'hounding magic obj array has 1 elem' );
+    ok( my $obj_sv = $value_tags_magic->obj, 'value tags magic has obj' );
+    is( $obj_sv->type,         "ARRAY", 'value tags magic obj is ARRAY' );
+    is( scalar $obj_sv->elems, 1,       'value tags magic obj array has 1 elem' );
 
     my $annotation = $obj_sv->elem(0);
     ok( defined $annotation,
-        'got first annotation from hounding magic obj array' );
+        'got first annotation from value tags magic obj array' );
 
     my @annotation_magics = $annotation->magic;
     is( scalar @annotation_magics, 1, 'annotation sv has some magic' );

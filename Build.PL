@@ -9,21 +9,28 @@ my $with_trace;
 
 my $build = Module::Build->new(
     module_name        => 'Scalar::ValueTags',
+    dist_author        => 'Noel Maddy <ZHTWN@cpan.org',
     configure_requires => {
         'Module::Build' => "0.4004",    # test_requires
     },
     requires => {
-        'perl' => '5.028',
+        'perl' => '5.044',
     },
     test_requires => {
-        'List::Util::PP' => 0,
-        'Test2::V0'      => 0,
+        'Test2::V0' => 0,
     },
     extra_compiler_flags =>
       [ $with_trace ? ("-DDEBUG_TRACE_ANNOTATIONS") : (), ],
-    license        => 'perl',
-    create_license => 1,
-    create_readme  => 1,
+    license         => 'perl',
+    create_license  => 1,
+    create_manifest => 1,
+    create_readme   => 1,
+    add_to_cleanup  => [
+        'LICENSE',
+        'MANIFEST',
+        'META.*',
+        'README',
+    ],
 );
 
 if (
