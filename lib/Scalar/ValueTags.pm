@@ -1,4 +1,4 @@
-package Scalar::ValueTags 0.001;
+package Scalar::ValueTags 0.002;
 
 use v5.44;
 
