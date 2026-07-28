@@ -1,11 +1,9 @@
 *.sw?
 *.bak
 Build
-LICENSE
 MANIFEST
 META.*
 MYMETA.*
-README
 _build/
 blib/
 lib/*/*.c
