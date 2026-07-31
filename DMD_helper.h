@@ -92,6 +92,14 @@ static void S_DMD_DumpStruct(pTHX_ DMDContext *ctx, const char *name, void *addr
     (*func)(aTHX_ ctx, name, addr, size, nfields, fields);
 }
 
+#ifdef MgIsV2
+#define DMD_SET_MGv2_HELPER(funcs, helper) \
+      DMD_SET_MAGIC_HELPER((MGVTBL *)funcs, helper)
+#
+#define DMD_DUMP_MGv2_USERSTRUCT(ctx, name, mg, nfields, fields) \
+      S_DMD_DumpStruct(aTHX_ ctx, name, MgUSERSTRUCT(mg, void *), MgFUNCS(mg)->user_size, nfields, fields)
+#endif
+
 #else
 typedef int DMD_Helper(pTHX_ const SV *sv);
 

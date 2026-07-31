@@ -36,7 +36,7 @@ my $build = Module::Build->new(
 if (
     eval {
         require Devel::MAT::Dumper::Helper
-          and Devel::MAT::Dumper::Helper->VERSION('0.45');
+          and Devel::MAT::Dumper::Helper->VERSION('0.52');
     }
   )
 {
