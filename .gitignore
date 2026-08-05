@@ -9,3 +9,4 @@ blib/
 lib/*/*.c
 lib/*/*.o
 *.tar.gz
+DMD_helper.h
